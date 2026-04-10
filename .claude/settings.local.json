@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(mkdir -p /c/Users/Usuario/.claude/agents)",
+      "Bash(cp -r /tmp/agency-agents/engineering/* /c/Users/Usuario/.claude/agents/)",
+      "Bash(cp -r /tmp/agency-agents/design/* /c/Users/Usuario/.claude/agents/)",
+      "Bash(cp -r /tmp/agency-agents/testing/* /c/Users/Usuario/.claude/agents/)",
+      "Bash(cp -r /tmp/agency-agents/product/* /c/Users/Usuario/.claude/agents/)",
+      "Bash(git clone:*)",
+      "Bash(mkdir -p /c/Users/Usuario/.claude/skills)",
+      "Bash(mkdir -p /c/Users/Usuario/.claude/commands)",
+      "Bash(cp -r /tmp/superpowers/skills/* /c/Users/Usuario/.claude/skills/)",
+      "Bash(cp /tmp/superpowers/agents/*.md /c/Users/Usuario/.claude/agents/)",
+      "Bash(cp /tmp/superpowers/commands/*.md /c/Users/Usuario/.claude/commands/)",
+      "Bash(cp -r /tmp/ecc/skills/* /c/Users/Usuario/.claude/skills/)",
+      "Bash(npx claude-mem:*)",
+      "Bash(pip --version)",
+      "Bash(py --version)",
+      "Bash(py -3 --version)",
+      "Bash(py -3 -m pip install --upgrade pip)",
+      "Bash(py -3 -m venv venv)",
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(venv/Scripts/pytest tests/test_ruc_validator.py tests/test_iva_calculator.py -v)",
+      "Bash(venv/Scripts/python -c \"from app.main import app; print\\('App OK'\\)\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git init:*)",
+      "Bash(git remote:*)"
+    ]
+  }
+}

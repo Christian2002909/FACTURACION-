@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "FastAPI Backend",
+      "runtimeExecutable": "venv/Scripts/uvicorn",
+      "runtimeArgs": ["app.main:app", "--reload", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "n8n Automations",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["n8n", "start"],
+      "port": 5678
+    }
+  ]
+}
