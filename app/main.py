@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import auth, clientes, productos, facturas, pagos
+from app.routers import proveedores, compras, caja, reportes
 import app.models  # noqa: F401
 
 
@@ -33,6 +34,10 @@ app.include_router(clientes.router, prefix=PREFIX)
 app.include_router(productos.router, prefix=PREFIX)
 app.include_router(facturas.router, prefix=PREFIX)
 app.include_router(pagos.router, prefix=PREFIX)
+app.include_router(proveedores.router)
+app.include_router(compras.router)
+app.include_router(caja.router)
+app.include_router(reportes.router)
 
 
 @app.get("/")

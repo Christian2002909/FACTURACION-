@@ -27,7 +27,12 @@
       "Bash(venv/Scripts/python -c \"from app.main import app; print\\('App OK'\\)\")",
       "mcp__Claude_Preview__preview_start",
       "Bash(git init:*)",
-      "Bash(git remote:*)"
+      "Bash(git remote:*)",
+      "Bash(.\\\\venv\\\\Scripts\\\\activate.ps1)",
+      "Bash(alembic revision:*)",
+      "Bash(venv/Scripts/python -c \"from passlib.context import CryptContext; ctx = CryptContext\\(schemes=['bcrypt']\\); print\\(ctx.hash\\('admin123'\\)\\)\")",
+      "Bash(venv/Scripts/python -c \"import bcrypt; h = bcrypt.hashpw\\(b'admin123', bcrypt.gensalt\\(12\\)\\); print\\(h.decode\\(\\)\\)\")",
+      "Bash(git add:*)"
     ]
   }
 }
