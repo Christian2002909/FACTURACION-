@@ -2,12 +2,19 @@
 Punto de entrada principal — lanza el servidor FastAPI en background
 y abre la interfaz gráfica de escritorio.
 """
+import os
 import subprocess
 import sys
 import time
 import threading
 import requests
 from app.gui.main_window import App
+
+
+# ── Crear directorios necesarios ───────────────────────────────────────────
+os.makedirs("data/facturas", exist_ok=True)
+os.makedirs("data/certificados", exist_ok=True)
+os.makedirs("data/backups", exist_ok=True)
 
 
 def start_server():
