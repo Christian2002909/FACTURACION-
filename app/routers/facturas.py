@@ -210,3 +210,52 @@ def descargar_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={nombre}"}
     )
+
+
+@router.post("/admin/activar-sifen")
+def activar_sifen_empresa(
+    empresa_id: int = 1,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Activa SIFEN para una empresa (solo para administrador/vendedor)."""
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
+    empresa.sifen_habilitado = True
+    db.commit()
+    db.refresh(empresa)
+    return {"mensaje": "SIFEN habilitado para esta empresa", "empresa_id": empresa.id, "sifen_habilitado": empresa.sifen_habilitado}
+
+
+@router.post("/{factura_id}/cancelar-de")
+def cancelar_de_sifen(
+    factura_id: int,
+    motivo: str = "",
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Cancela un DE aprobado en SIFEN (solo si está APROBADO)."""
+    from app.models.factura import EstadoSIFEN
+    from app.sifen.client import cancelar_de
+
+    factura = db.query(Factura).filter(Factura.id == factura_id).first()
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    if factura.sifen_estado != EstadoSIFEN.APROBADO:
+        raise HTTPException(status_code=400, detail="Solo se puede cancelar un DE con estado APROBADO en SIFEN")
+
+    if not factura.sifen_cdc:
+        raise HTTPException(status_code=400, detail="La factura no tiene CDC asignado")
+
+    empresa = db.query(Empresa).first()
+    try:
+        resultado = cancelar_de(factura.sifen_cdc, motivo or "Cancelación", empresa)
+        factura.estado = EstadoFactura.ANULADA
+        factura.observacion = f"Cancelado en SIFEN: {motivo}"
+        db.commit()
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

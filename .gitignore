@@ -64,6 +64,11 @@ data/certificados/
 *.crt
 *.cert
 
+# ─── MICROSERVICIO SIFEN ────────────────────────────────────────────────────
+sifen-service/node_modules/
+sifen-service/package-lock.json
+sifen-service/.env
+
 # ─── RESPALDOS ────────────────────────────────────────────────────────────
 data/backups/
 *.backup

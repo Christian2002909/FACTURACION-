@@ -12,3 +12,6 @@ Pillow>=10.0.0
 httpx>=0.27.0
 pytest==8.3.4
 pytest-asyncio==0.25.0
+
+# Nota: Para SIFEN, requiere Node.js con:
+# npm install facturacionelectronicapy-xmlgen facturacionelectronicapy-xmlsign facturacionelectronicapy-setapi express
