@@ -1,21 +1,27 @@
-from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
+"""
+Router de Facturas — Endpoints CRUD + emisión + PDF
+Usa factura_service.py para lógica centralizada
+"""
+import os
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from decimal import Decimal
 from io import BytesIO
+
 from app.dependencies import get_db, get_current_user
 from app.models.factura import Factura, EstadoFactura
 from app.models.detalle_factura import DetalleFactura
+from app.models.empresa import Empresa
 from app.schemas.factura import FacturaCreate, FacturaUpdate, FacturaResponse
 from app.core.iva_calculator import calcular_iva_linea, calcular_totales
-from app.core.numeracion import obtener_siguiente_numero, formatear_numero_completo
-from app.core.exceptions import http_404, http_400, http_409
-from app.sifen.events import on_factura_emitida
+from app.pdf.factura_pdf import generar_factura_pdf
+from app.services.factura_service import emitir_factura, anular_factura, FaculturaServiceError
 
-router = APIRouter(prefix="/facturas", tags=["facturas"])
+router = APIRouter(prefix="/facturas", tags=["Facturas"])
 
 
 def _calcular_y_crear_detalles(db, factura, detalles_data):
+    """Crea detalles de factura y calcula totales."""
     lineas = []
     for i, d in enumerate(detalles_data):
         total_linea = d.cantidad * d.precio_unitario * (1 - d.descuento_porcentaje / 100)
@@ -49,9 +55,15 @@ def _calcular_y_crear_detalles(db, factura, detalles_data):
 
 
 @router.get("", response_model=list[FacturaResponse])
-def listar(estado: EstadoFactura | None = None, cliente_id: int | None = None,
-           skip: int = 0, limit: int = 100,
-           db: Session = Depends(get_db), _=Depends(get_current_user)):
+def listar(
+    estado: EstadoFactura | None = None,
+    cliente_id: int | None = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Lista facturas con filtros opcionales."""
     q = db.query(Factura)
     if estado:
         q = q.filter(Factura.estado == estado)
@@ -61,7 +73,12 @@ def listar(estado: EstadoFactura | None = None, cliente_id: int | None = None,
 
 
 @router.post("", response_model=FacturaResponse, status_code=201)
-def crear(body: FacturaCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def crear(
+    body: FacturaCreate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Crea una nueva factura en estado BORRADOR."""
     factura = Factura(
         tipo_documento=body.tipo_documento,
         fecha_emision=body.fecha_emision,
@@ -78,21 +95,33 @@ def crear(body: FacturaCreate, db: Session = Depends(get_db), _=Depends(get_curr
     return factura
 
 
-@router.get("/{id}", response_model=FacturaResponse)
-def obtener(id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    f = db.query(Factura).filter(Factura.id == id).first()
+@router.get("/{factura_id}", response_model=FacturaResponse)
+def obtener(
+    factura_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Obtiene detalle de una factura."""
+    f = db.query(Factura).filter(Factura.id == factura_id).first()
     if not f:
-        raise http_404()
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
     return f
 
 
-@router.put("/{id}", response_model=FacturaResponse)
-def actualizar(id: int, body: FacturaUpdate, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    f = db.query(Factura).filter(Factura.id == id).first()
+@router.put("/{factura_id}", response_model=FacturaResponse)
+def actualizar(
+    factura_id: int,
+    body: FacturaUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Actualiza una factura (solo si está en BORRADOR)."""
+    f = db.query(Factura).filter(Factura.id == factura_id).first()
     if not f:
-        raise http_404()
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
     if f.estado != EstadoFactura.BORRADOR:
-        raise http_400("Solo se pueden editar facturas en estado BORRADOR")
+        raise HTTPException(status_code=400, detail="Solo se pueden editar facturas en estado BORRADOR")
+
     if body.fecha_emision:
         f.fecha_emision = body.fecha_emision
     if body.condicion_venta:
@@ -104,56 +133,129 @@ def actualizar(id: int, body: FacturaUpdate, db: Session = Depends(get_db), _=De
             db.delete(d)
         db.flush()
         _calcular_y_crear_detalles(db, f, body.detalles)
+
     db.commit()
     db.refresh(f)
     return f
 
 
-@router.post("/{id}/emitir", response_model=FacturaResponse)
-def emitir(id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    f = db.query(Factura).filter(Factura.id == id).first()
+@router.post("/{factura_id}/emitir", response_model=FacturaResponse)
+def emitir(
+    factura_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """
+    Emite una factura: BORRADOR → EMITIDA
+    - Asigna número correlativo
+    - Genera PDF
+    - Dispara SIFEN si está habilitado
+    """
+    try:
+        if not db.query(Factura).filter(Factura.id == factura_id).first():
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        return emitir_factura(db, factura_id)
+    except FaculturaServiceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{factura_id}/anular", response_model=FacturaResponse)
+def anular(
+    factura_id: int,
+    motivo: str = "",
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """
+    Anula una factura emitida
+    - No se puede anular si está aprobada en SIFEN (requiere NC)
+    - Regenera PDF con marca ANULADA
+    """
+    try:
+        if not db.query(Factura).filter(Factura.id == factura_id).first():
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        return anular_factura(db, factura_id, motivo)
+    except FaculturaServiceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{factura_id}/pdf")
+def descargar_pdf(
+    factura_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Descarga el PDF de una factura emitida."""
+    f = db.query(Factura).filter(Factura.id == factura_id).first()
     if not f:
-        raise http_404()
-    if f.estado != EstadoFactura.BORRADOR:
-        raise http_409(f"La factura está en estado {f.estado}, no se puede emitir")
-    if not f.detalles:
-        raise http_400("La factura no tiene detalles")
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
 
-    timbrado, establecimiento, punto, numero = obtener_siguiente_numero(db)
-    f.timbrado = timbrado
-    f.establecimiento = establecimiento
-    f.punto_expedicion = punto
-    f.numero = numero
-    f.numero_completo = formatear_numero_completo(establecimiento, punto, numero)
-    f.estado = EstadoFactura.EMITIDA
-    db.commit()
-    db.refresh(f)
+    if f.estado == EstadoFactura.BORRADOR:
+        raise HTTPException(status_code=400, detail="No se puede descargar PDF de un borrador. Primero emitir la factura.")
 
-    on_factura_emitida(f.id)
-    return f
+    # Si existe archivo en disco, devolverlo
+    if f.pdf_path and os.path.exists(f.pdf_path):
+        return FileResponse(
+            f.pdf_path,
+            media_type="application/pdf",
+            filename=f"factura_{f.numero_completo}.pdf"
+        )
 
-
-@router.post("/{id}/anular", response_model=FacturaResponse)
-def anular(id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    f = db.query(Factura).filter(Factura.id == id).first()
-    if not f:
-        raise http_404()
-    if f.estado != EstadoFactura.EMITIDA:
-        raise http_409(f"Solo se pueden anular facturas EMITIDAS, estado actual: {f.estado}")
-    f.estado = EstadoFactura.ANULADA
-    db.commit()
-    db.refresh(f)
-    return f
-
-
-@router.get("/{id}/pdf")
-def generar_pdf(id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    f = db.query(Factura).filter(Factura.id == id).first()
-    if not f:
-        raise http_404()
-    from app.pdf.factura_pdf import generar_factura_pdf
-    empresa = db.query(__import__("app.models.empresa", fromlist=["Empresa"]).Empresa).filter_by(id=1).first()
+    # Si no existe, generar en memoria
+    empresa = db.query(Empresa).first()
     pdf_bytes = generar_factura_pdf(f, empresa)
     nombre = f"factura_{f.numero_completo or f.id}.pdf"
-    return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf",
-                             headers={"Content-Disposition": f"attachment; filename={nombre}"})
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={nombre}"}
+    )
+
+
+@router.post("/admin/activar-sifen")
+def activar_sifen_empresa(
+    empresa_id: int = 1,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Activa SIFEN para una empresa (solo para administrador/vendedor)."""
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
+    empresa.sifen_habilitado = True
+    db.commit()
+    db.refresh(empresa)
+    return {"mensaje": "SIFEN habilitado para esta empresa", "empresa_id": empresa.id, "sifen_habilitado": empresa.sifen_habilitado}
+
+
+@router.post("/{factura_id}/cancelar-de")
+def cancelar_de_sifen(
+    factura_id: int,
+    motivo: str = "",
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """Cancela un DE aprobado en SIFEN (solo si está APROBADO)."""
+    from app.models.factura import EstadoSIFEN
+    from app.sifen.client import cancelar_de
+
+    factura = db.query(Factura).filter(Factura.id == factura_id).first()
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    if factura.sifen_estado != EstadoSIFEN.APROBADO:
+        raise HTTPException(status_code=400, detail="Solo se puede cancelar un DE con estado APROBADO en SIFEN")
+
+    if not factura.sifen_cdc:
+        raise HTTPException(status_code=400, detail="La factura no tiene CDC asignado")
+
+    empresa = db.query(Empresa).first()
+    try:
+        resultado = cancelar_de(factura.sifen_cdc, motivo or "Cancelación", empresa)
+        factura.estado = EstadoFactura.ANULADA
+        factura.observacion = f"Cancelado en SIFEN: {motivo}"
+        db.commit()
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

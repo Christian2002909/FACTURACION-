@@ -1,12 +1,85 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# .gitignore — Sistema de Facturación Paraguay
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── ENTORNO VIRTUAL ──────────────────────────────────────────────────────
 venv/
+env/
+ENV/
+.venv
+
+# ─── PYTHON ───────────────────────────────────────────────────────────────
 __pycache__/
-*.pyc
-*.pyo
-.env
-data/facturacion.db
-data/*.db
+*.py[cod]
+*$py.class
+*.so
 *.egg-info/
 dist/
 build/
+.eggs/
+*.egg
+
+# ─── IDE ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ─── TESTING ──────────────────────────────────────────────────────────────
 .pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── LINTING ──────────────────────────────────────────────────────────────
 .ruff_cache/
+.flake8
+
+# ─── CONFIGURACIÓN ────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── BASE DE DATOS ────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+
+# ─── ARCHIVOS GENERADOS ───────────────────────────────────────────────────
+# PDFs generados (pueden ser muy grandes)
+data/facturas/
+data/facturas/*
+
+# ─── CERTIFICADOS DIGITALES (NUNCA COMMITEAR) ─────────────────────────────
+# Archivos sensibles — SIFEN / e-Kuatia
+data/certificados/
+*.p12
+*.pfx
+*.pem
+*.key
+*.crt
+*.cert
+
+# ─── BUILD Y DISTRIBUCIÓN ────────────────────────────────────────────────────
+build/
+dist/
+*.spec
+*.exe
+
+# ─── RESPALDOS ────────────────────────────────────────────────────────────
+data/backups/
+*.backup
+*.bak
+
+# ─── LOGS ─────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── SISTEMA OPERATIVO ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.directory
