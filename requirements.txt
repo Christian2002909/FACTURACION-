@@ -1,17 +1,17 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-sqlalchemy==2.0.36
-alembic==1.14.0
-pydantic==2.10.4
-pydantic-settings==2.7.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.20
-reportlab==4.2.5
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+sqlalchemy>=2.0.0
+alembic>=1.14.0
+pydantic>=2.11.0
+pydantic-settings>=2.7.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.20
+reportlab>=4.2.5
 Pillow>=10.0.0
 httpx>=0.27.0
-pytest==8.3.4
-pytest-asyncio==0.25.0
+pytest>=8.3.4
+pytest-asyncio>=0.25.0
 
-# Nota: Para SIFEN, requiere Node.js con:
-# npm install facturacionelectronicapy-xmlgen facturacionelectronicapy-xmlsign facturacionelectronicapy-setapi express
+# Nota: Compatible con Python 3.11+
+# Para Python 3.14, las versiones >= especificadas soportan mejor la compatibilidad
