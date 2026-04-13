@@ -4,7 +4,7 @@ from datetime import datetime, date
 import requests
 import threading
 
-API = "http://localhost:8001/api/v1"
+API = "http://localhost:8000/api/v1"
 TOKEN = {"access": None}
 
 
