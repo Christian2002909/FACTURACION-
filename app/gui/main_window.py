@@ -9,6 +9,8 @@ import requests
 import threading
 import json
 import os
+import subprocess
+import platform
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -69,6 +71,46 @@ class APIClient:
 
 
 client = APIClient()
+
+
+# ── Print config helpers ─────────────────────────────────────────────────────
+PRINT_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "print_config.json")
+
+def load_print_config():
+    try:
+        with open(PRINT_CONFIG_PATH, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {"print_mode": "ask", "printer_type": "a4"}
+
+def save_print_config(config):
+    os.makedirs(os.path.dirname(PRINT_CONFIG_PATH), exist_ok=True)
+    with open(PRINT_CONFIG_PATH, "w") as f:
+        json.dump(config, f)
+
+
+def print_factura(factura_id, printer_type="a4"):
+    """Descarga el PDF de la factura y lo envía a imprimir."""
+    try:
+        r = client.get(f"/facturas/{factura_id}/pdf")
+        if r.status_code != 200:
+            messagebox.showerror("Error", "No se pudo obtener el PDF de la factura")
+            return False
+
+        os.makedirs("data/facturas", exist_ok=True)
+        pdf_path = os.path.join("data", "facturas", f"factura_{factura_id}.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(r.content)
+
+        if platform.system() == "Windows":
+            os.startfile(pdf_path, "print")
+        else:
+            subprocess.run(["lp", pdf_path], check=True)
+
+        return True
+    except Exception as e:
+        messagebox.showerror("Error de impresión", f"No se pudo imprimir: {str(e)}")
+        return False
 
 
 # ── Logo helper ──────────────────────────────────────────────────────────────
@@ -708,6 +750,7 @@ class FacturasPanel(ctk.CTkFrame):
         tb.pack_propagate(False)
         btn(tb, "Nueva Factura", self._nueva, C["accent"], "➕").pack(side="left", padx=12, pady=8)
         btn(tb, "PDF", self._pdf, C["accent2"], "📄").pack(side="left", padx=4)
+        btn(tb, "Imprimir", self._imprimir, C["accent"], "🖨️").pack(side="left", padx=4)
         btn(tb, "Anular", self._anular, C["danger"], "❌").pack(side="left", padx=4)
         btn(tb, "↺", self.load, C["border"]).pack(side="right", padx=12)
 
@@ -782,6 +825,12 @@ class FacturasPanel(ctk.CTkFrame):
             except Exception as e:
                 self.after(0, lambda: messagebox.showerror("Error", str(e)))
         threading.Thread(target=do, daemon=True).start()
+
+    def _imprimir(self):
+        if not self._sel_id:
+            return messagebox.showinfo("Aviso", "Seleccione una factura")
+        config = load_print_config()
+        print_factura(self._sel_id, config["printer_type"])
 
 
 # ── FacturaForm — Nueva factura con doble modo de carga ──────────────────────
@@ -1354,6 +1403,15 @@ class VistaPreviewFactura(ctk.CTkToplevel):
     def _emision_ok(self, num):
         messagebox.showinfo("Factura Emitida",
                             f"Factura emitida exitosamente.\nNúmero: {num}")
+        # ── Impresión automática según configuración ──
+        fid = self.factura.get("id")
+        if fid:
+            config = load_print_config()
+            if config["print_mode"] == "auto":
+                print_factura(fid, config["printer_type"])
+            elif config["print_mode"] == "ask":
+                if messagebox.askyesno("Imprimir", "¿Desea imprimir la factura?"):
+                    print_factura(fid, config["printer_type"])
         self.on_emitir_done()
         self.destroy()
 
@@ -1834,6 +1892,43 @@ class ConfiguracionPanel(ctk.CTkFrame):
         self.conn_lbl = ctk.CTkLabel(gen_btns, text="", font=("Segoe UI", 11))
         self.conn_lbl.pack(side="left", padx=8)
 
+        # ── Print config section ──
+        prt = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=12,
+                           border_width=1, border_color=C["border"])
+        prt.pack(fill="x", pady=4)
+        ctk.CTkLabel(prt, text="🖨️  Configuración de Impresión",
+                     font=("Segoe UI", 14, "bold"), text_color=C["text"]).pack(anchor="w", padx=16, pady=(12,4))
+
+        form_prt = ctk.CTkFrame(prt, fg_color="transparent")
+        form_prt.pack(fill="x", padx=8, pady=4)
+        form_prt.grid_columnconfigure(1, weight=1)
+        form_prt.grid_columnconfigure(3, weight=1)
+
+        self._print_mode_map = {
+            "Preguntar antes de imprimir": "ask",
+            "Imprimir automáticamente": "auto",
+            "No imprimir": "none",
+        }
+        self._print_mode_reverse = {v: k for k, v in self._print_mode_map.items()}
+        self._printer_type_map = {
+            "Normal (A4)": "a4",
+            "Térmica POS (80mm)": "pos80",
+            "Térmica POS (58mm)": "pos58",
+        }
+        self._printer_type_reverse = {v: k for k, v in self._printer_type_map.items()}
+
+        pcfg = load_print_config()
+        self.prt_mode = field(form_prt, "Al emitir factura", 0,
+                              choices=["Preguntar antes de imprimir", "Imprimir automáticamente", "No imprimir"],
+                              default=self._print_mode_reverse.get(pcfg.get("print_mode","ask"), "Preguntar antes de imprimir"))
+        self.prt_type = field(form_prt, "Tipo de impresora", 1,
+                              choices=["Normal (A4)", "Térmica POS (80mm)", "Térmica POS (58mm)"],
+                              default=self._printer_type_reverse.get(pcfg.get("printer_type","a4"), "Normal (A4)"))
+
+        prt_btns = ctk.CTkFrame(prt, fg_color="transparent")
+        prt_btns.pack(fill="x", padx=16, pady=(4,12))
+        btn(prt_btns, "Guardar configuración de impresión", self._save_print, C["accent"], "💾").pack(side="left", padx=4)
+
         # ── Separator ──
         sep = ctk.CTkFrame(scroll, fg_color="transparent")
         sep.pack(fill="x", pady=12)
@@ -1940,6 +2035,14 @@ class ConfiguracionPanel(ctk.CTkFrame):
             except Exception as e:
                 self.after(0, lambda: messagebox.showerror("Error", str(e)))
         threading.Thread(target=do, daemon=True).start()
+
+    def _save_print(self):
+        config = {
+            "print_mode": self._print_mode_map.get(self.prt_mode.get(), "ask"),
+            "printer_type": self._printer_type_map.get(self.prt_type.get(), "a4"),
+        }
+        save_print_config(config)
+        toast(self, "Configuración de impresión guardada")
 
     def _test_connection(self):
         def do():
