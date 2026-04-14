@@ -1,5 +1,5 @@
 """
-Punto de entrada — sincroniza DB, lanza servidor FastAPI y abre la GUI.
+FacturaPY — Punto de entrada — sincroniza DB, lanza servidor FastAPI y abre la GUI.
 """
 import os
 import sys

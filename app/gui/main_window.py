@@ -1,6 +1,6 @@
 """
-GUI moderna — Sistema de Facturación Paraguay
-CustomTkinter · dark mode · diseño profesional
+GUI moderna — FacturaPY — Sistema de Gestión Comercial
+CustomTkinter · modo claro · colores CV TechStore
 """
 import customtkinter as ctk
 import tkinter as tk
@@ -8,29 +8,33 @@ from tkinter import ttk, messagebox
 import requests
 import threading
 import json
+import os
 from datetime import date, datetime
 from decimal import Decimal
 
 # ── Configuración global ──────────────────────────────────────────────────────
 API = "http://localhost:8000/api/v1"
-ctk.set_appearance_mode("dark")
+ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
 C = {
-    "bg":       "#1a1a2e",
-    "panel":    "#16213e",
-    "card":     "#0f3460",
-    "accent":   "#e94560",
-    "accent2":  "#533483",
-    "text":     "#eaeaea",
-    "muted":    "#8892a4",
-    "success":  "#2ecc71",
-    "warning":  "#f39c12",
-    "danger":   "#e74c3c",
-    "border":   "#2a2a4a",
-    "row_even": "#1e1e3a",
-    "row_odd":  "#16213e",
-    "sel":      "#533483",
+    "bg":        "#F4F6F9",
+    "panel":     "#FFFFFF",
+    "sidebar":   "#1B2A4A",
+    "header":    "#1B2A4A",
+    "accent":    "#1565C0",
+    "accent2":   "#29ABE2",
+    "text":      "#1B2A4A",
+    "text_inv":  "#FFFFFF",
+    "muted":     "#607D8B",
+    "success":   "#2E7D32",
+    "warning":   "#F57F17",
+    "danger":    "#C62828",
+    "border":    "#E0E7EF",
+    "row_even":  "#F8FAFC",
+    "row_odd":   "#FFFFFF",
+    "sel":       "#1565C0",
+    "input_bg":  "#F4F6F9",
 }
 
 
@@ -38,6 +42,7 @@ C = {
 class APIClient:
     def __init__(self):
         self.token = None
+        self.username = "admin"
         self.s = requests.Session()
 
     def login(self, username, password):
@@ -45,6 +50,7 @@ class APIClient:
                         json={"username": username, "password": password}, timeout=5)
         if r.status_code == 200:
             self.token = r.json()["access_token"]
+            self.username = username
             self.s.headers.update({"Authorization": f"Bearer {self.token}"})
             return True
         return False
@@ -65,26 +71,46 @@ class APIClient:
 client = APIClient()
 
 
+# ── Logo helper ──────────────────────────────────────────────────────────────
+def _load_logo(width, height):
+    """Carga el logo desde app/assets/LOGO-CV.jpg con PIL, retorna CTkImage o None."""
+    try:
+        from PIL import Image
+        logo_paths = [
+            os.path.join(os.path.dirname(__file__), "..", "assets", "LOGO-CV.jpg"),
+            os.path.join("app", "assets", "LOGO-CV.jpg"),
+            "LOGO-CV.jpg",
+        ]
+        for p in logo_paths:
+            if os.path.exists(p):
+                img = Image.open(p)
+                return ctk.CTkImage(light_image=img, dark_image=img, size=(width, height))
+    except Exception:
+        pass
+    return None
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def make_table(parent, columns, col_widths=None):
-    frame = ctk.CTkFrame(parent, fg_color=C["panel"], corner_radius=10)
+    frame = ctk.CTkFrame(parent, fg_color=C["panel"], corner_radius=10,
+                         border_width=1, border_color=C["border"])
     style = ttk.Style()
     style.theme_use("clam")
-    style.configure("Dark.Treeview",
+    style.configure("Light.Treeview",
                     background=C["row_odd"], foreground=C["text"],
                     fieldbackground=C["row_odd"], rowheight=32,
                     borderwidth=0, font=("Segoe UI", 11))
-    style.configure("Dark.Treeview.Heading",
-                    background=C["card"], foreground=C["text"],
+    style.configure("Light.Treeview.Heading",
+                    background=C["header"], foreground=C["text_inv"],
                     font=("Segoe UI", 11, "bold"), borderwidth=0, relief="flat")
-    style.map("Dark.Treeview",
+    style.map("Light.Treeview",
               background=[("selected", C["sel"])],
               foreground=[("selected", "#ffffff")])
-    style.map("Dark.Treeview.Heading",
-              background=[("active", C["accent2"])])
+    style.map("Light.Treeview.Heading",
+              background=[("active", C["accent"])])
 
     tree = ttk.Treeview(frame, columns=columns, show="headings",
-                        style="Dark.Treeview", selectmode="browse")
+                        style="Light.Treeview", selectmode="browse")
     for i, col in enumerate(columns):
         w = col_widths[i] if col_widths else 150
         tree.heading(col, text=col)
@@ -112,7 +138,8 @@ def field(parent, label, row, col=0, wide=False, choices=None, default=None):
         var = ctk.StringVar(value=default or choices[0])
         w = ctk.CTkOptionMenu(parent, values=choices, variable=var,
                                width=260 if wide else 200,
-                               fg_color=C["card"], button_color=C["accent2"],
+                               fg_color=C["input_bg"], button_color=C["accent"],
+                               text_color=C["text"],
                                font=("Segoe UI", 11))
         w.grid(row=row, column=col * 2 + 1, sticky="ew", pady=5,
                columnspan=3 if wide else 1, padx=(0, 12))
@@ -121,7 +148,7 @@ def field(parent, label, row, col=0, wide=False, choices=None, default=None):
         var = ctk.StringVar(value=default or "")
         e = ctk.CTkEntry(parent, textvariable=var,
                          width=420 if wide else 200,
-                         fg_color=C["card"], border_color=C["border"],
+                         fg_color=C["input_bg"], border_color=C["border"],
                          text_color=C["text"], font=("Segoe UI", 11))
         e.grid(row=row, column=col * 2 + 1, sticky="ew", pady=5,
                columnspan=3 if wide else 1, padx=(0, 12))
@@ -139,14 +166,20 @@ def toast(parent, msg, ok=True):
 
 def btn(parent, text, cmd, color=None, icon=""):
     color = color or C["accent"]
+    hover = C["header"] if color == C["accent"] else C["accent"]
     return ctk.CTkButton(parent, text=f"{icon}  {text}" if icon else text,
-                         command=cmd, fg_color=color, hover_color=C["accent2"],
+                         command=cmd, fg_color=color, hover_color=hover,
+                         text_color=C["text_inv"],
                          font=("Segoe UI", 12, "bold"),
                          corner_radius=8, height=36)
 
 
 def gs(val):
-    return f"Gs {int(float(val or 0)):,}".replace(",", ".")
+    try:
+        n = int(float(val or 0))
+        return f"Gs. {n:,}".replace(",", ".")
+    except Exception:
+        return "Gs. 0"
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────
@@ -161,28 +194,40 @@ class LoginScreen(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
 
         card = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=20,
-                            width=400, height=480)
+                            width=420, height=540, border_width=1, border_color=C["border"])
         card.grid(row=0, column=0)
         card.grid_propagate(False)
 
-        ctk.CTkLabel(card, text="📊", font=("Segoe UI", 52)).pack(pady=(44, 4))
-        ctk.CTkLabel(card, text="Facturación Paraguay",
-                     font=("Segoe UI", 22, "bold"),
-                     text_color=C["text"]).pack()
+        # Logo
+        logo_img = _load_logo(180, 60)
+        if logo_img:
+            ctk.CTkLabel(card, image=logo_img, text="").pack(pady=(36, 8))
+        else:
+            ctk.CTkLabel(card, text="CV TechStore",
+                         font=("Segoe UI", 18, "bold"),
+                         text_color=C["accent"]).pack(pady=(36, 8))
+
+        ctk.CTkLabel(card, text="FacturaPY",
+                     font=("Segoe UI", 26, "bold"),
+                     text_color=C["text"]).pack(pady=(4, 0))
         ctk.CTkLabel(card, text="Sistema de Gestión Comercial",
-                     font=("Segoe UI", 12), text_color=C["muted"]).pack(pady=(2, 28))
+                     font=("Segoe UI", 12), text_color=C["muted"]).pack(pady=(2, 4))
+        ctk.CTkLabel(card, text="v1.0 · Paraguay 2026",
+                     font=("Segoe UI", 10), text_color=C["muted"]).pack(pady=(0, 20))
+
+        ctk.CTkFrame(card, fg_color=C["border"], height=1).pack(fill="x", padx=40)
 
         self.user = ctk.CTkEntry(card, placeholder_text="Usuario",
                                   width=300, height=44,
-                                  fg_color=C["card"], border_color=C["border"],
-                                  font=("Segoe UI", 13))
-        self.user.pack(pady=6)
+                                  fg_color=C["input_bg"], border_color=C["border"],
+                                  text_color=C["text"], font=("Segoe UI", 13))
+        self.user.pack(pady=(20, 6))
         self.user.insert(0, "admin")
 
         self.pw = ctk.CTkEntry(card, placeholder_text="Contraseña",
                                 show="•", width=300, height=44,
-                                fg_color=C["card"], border_color=C["border"],
-                                font=("Segoe UI", 13))
+                                fg_color=C["input_bg"], border_color=C["border"],
+                                text_color=C["text"], font=("Segoe UI", 13))
         self.pw.pack(pady=6)
 
         self.err = ctk.CTkLabel(card, text="", text_color=C["danger"],
@@ -192,11 +237,10 @@ class LoginScreen(ctk.CTkFrame):
         self.login_btn = ctk.CTkButton(card, text="Iniciar Sesión",
                                         command=self._login,
                                         width=300, height=44,
-                                        fg_color=C["accent"], hover_color="#c0392b",
+                                        fg_color=C["accent"], hover_color=C["header"],
+                                        text_color=C["text_inv"],
                                         font=("Segoe UI", 13, "bold"), corner_radius=10)
         self.login_btn.pack(pady=8)
-        ctk.CTkLabel(card, text="v2.0 · Paraguay 2026",
-                     text_color=C["muted"], font=("Segoe UI", 10)).pack(pady=(16, 0))
         self.pw.bind("<Return>", lambda e: self._login())
 
     def _login(self):
@@ -209,7 +253,7 @@ class LoginScreen(ctk.CTkFrame):
             ok = client.login(self.user.get(), self.pw.get())
             self.after(0, lambda: self._result(ok))
         except Exception:
-            self.after(0, lambda: messagebox.showerror("Error de conexión", "No se pudo conectar al servidor. Verifique que la aplicación esté corriendo."))
+            self.after(0, lambda: self._result(False))
 
     def _result(self, ok):
         self.login_btn.configure(state="normal", text="Iniciar Sesión")
@@ -229,12 +273,13 @@ MENU = [
     ("🛒", "Compras"),
     ("💰", "Caja"),
     ("📈", "Reportes"),
+    ("⚙️", "Configuración"),
 ]
 
 
 class Sidebar(ctk.CTkFrame):
     def __init__(self, master, on_select):
-        super().__init__(master, fg_color=C["panel"], width=210, corner_radius=0)
+        super().__init__(master, fg_color=C["sidebar"], width=220, corner_radius=0)
         self.on_select = on_select
         self._btns = {}
         self._active = None
@@ -242,35 +287,42 @@ class Sidebar(ctk.CTkFrame):
 
     def _build(self):
         self.pack_propagate(False)
-        logo = ctk.CTkFrame(self, fg_color=C["card"], corner_radius=0, height=64)
-        logo.pack(fill="x")
-        logo.pack_propagate(False)
-        ctk.CTkLabel(logo, text="📊 Facturación",
-                     font=("Segoe UI", 15, "bold"), text_color=C["text"]).pack(expand=True)
 
-        ctk.CTkFrame(self, fg_color=C["border"], height=1).pack(fill="x")
-        ctk.CTkLabel(self, text="  MENÚ PRINCIPAL", text_color=C["muted"],
+        # Logo area at top
+        logo_frame = ctk.CTkFrame(self, fg_color=C["sidebar"], corner_radius=0, height=64)
+        logo_frame.pack(fill="x")
+        logo_frame.pack_propagate(False)
+        logo_img = _load_logo(120, 40)
+        if logo_img:
+            ctk.CTkLabel(logo_frame, image=logo_img, text="").pack(expand=True)
+        else:
+            ctk.CTkLabel(logo_frame, text="CV TechStore",
+                         font=("Segoe UI", 13, "bold"),
+                         text_color=C["text_inv"]).pack(expand=True)
+
+        ctk.CTkFrame(self, fg_color="#2A3E66", height=1).pack(fill="x")
+        ctk.CTkLabel(self, text="  MENÚ PRINCIPAL", text_color="#8899B3",
                      font=("Segoe UI", 9, "bold")).pack(pady=(16, 4), anchor="w")
 
         for icon, name in MENU:
             b = ctk.CTkButton(self, text=f"  {icon}  {name}", anchor="w",
                                height=44, fg_color="transparent",
-                               hover_color=C["card"], text_color=C["muted"],
+                               hover_color=C["accent2"], text_color="#B0BEC5",
                                font=("Segoe UI", 12), corner_radius=6,
                                command=lambda n=name: self.select(n))
             b.pack(fill="x", padx=8, pady=2)
             self._btns[name] = b
 
         ctk.CTkFrame(self, fg_color="transparent").pack(fill="both", expand=True)
-        ctk.CTkLabel(self, text="v2.0 · 2026",
-                     text_color=C["muted"], font=("Segoe UI", 9)).pack(pady=12)
+        ctk.CTkLabel(self, text="FacturaPY v1.0",
+                     text_color="#8899B3", font=("Segoe UI", 9)).pack(pady=12)
 
     def select(self, name):
         if self._active:
             self._btns[self._active].configure(fg_color="transparent",
-                                                text_color=C["muted"])
+                                                text_color="#B0BEC5")
         self._active = name
-        self._btns[name].configure(fg_color=C["accent"], text_color="#ffffff")
+        self._btns[name].configure(fg_color=C["accent"], text_color=C["text_inv"])
         self.on_select(name)
 
 
@@ -296,10 +348,12 @@ class DashboardPanel(ctk.CTkFrame):
                 ("👥", "Clientes", "—", C["accent2"]),
                 ("📦", "Productos", "—", C["warning"])]
         for i, (icon, lbl, val, color) in enumerate(defs):
-            card = ctk.CTkFrame(cards_frame, fg_color=C["panel"], corner_radius=12)
+            card = ctk.CTkFrame(cards_frame, fg_color=C["panel"], corner_radius=12,
+                                border_width=1, border_color=C["border"])
             card.grid(row=0, column=i, padx=8, sticky="ew")
             cards_frame.grid_columnconfigure(i, weight=1)
-            ctk.CTkLabel(card, text=icon, font=("Segoe UI", 30)).pack(pady=(16, 0))
+            ctk.CTkLabel(card, text=icon, font=("Segoe UI", 30),
+                         text_color=C["text"]).pack(pady=(16, 0))
             v = ctk.CTkLabel(card, text=val, font=("Segoe UI", 18, "bold"),
                              text_color=color)
             v.pack()
@@ -307,15 +361,16 @@ class DashboardPanel(ctk.CTkFrame):
                          text_color=C["muted"]).pack(pady=(0, 14))
             self.m[lbl] = v
 
-        info = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        info = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                            border_width=1, border_color=C["border"])
         info.pack(fill="both", expand=True, padx=24, pady=16)
-        ctk.CTkLabel(info, text="Sistema de Facturación Paraguay",
+        ctk.CTkLabel(info, text="FacturaPY — Sistema de Gestión Comercial",
                      font=("Segoe UI", 18, "bold"), text_color=C["text"]).pack(pady=(28, 4))
         ctk.CTkLabel(info,
-                     text="Gestión completa de facturas electrónicas, clientes, productos, caja y reportes.",
+                     text="Gestión completa de facturas, clientes, productos, caja y reportes.",
                      font=("Segoe UI", 12), text_color=C["muted"]).pack()
         ctk.CTkLabel(info,
-                     text="✓ Factura electrónica SIFEN  ·  ✓ PDF automático  ·  ✓ IVA 5% y 10%  ·  ✓ Dark Mode",
+                     text="✓ Factura electrónica SIFEN  ·  ✓ PDF automático  ·  ✓ IVA 5% y 10%  ·  ✓ Modo Claro",
                      font=("Segoe UI", 11), text_color=C["success"]).pack(pady=12)
 
         threading.Thread(target=self._load, daemon=True).start()
@@ -350,7 +405,8 @@ class CrudPanel(ctk.CTkFrame):
         ctk.CTkLabel(hdr, text=self.TITLE,
                      font=("Segoe UI", 22, "bold"), text_color=C["text"]).pack(side="left")
 
-        tb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10, height=52)
+        tb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10, height=52,
+                          border_width=1, border_color=C["border"])
         tb.pack(fill="x", padx=24, pady=4)
         tb.pack_propagate(False)
         self._build_toolbar(tb)
@@ -365,12 +421,13 @@ class CrudPanel(ctk.CTkFrame):
         self.search_var = ctk.StringVar()
         self.search_var.trace_add("write", lambda *a: self._filter())
         ctk.CTkEntry(tb, textvariable=self.search_var, placeholder_text="🔍  Buscar...",
-                     width=240, height=34, fg_color=C["card"], border_color=C["border"],
+                     width=240, height=34, fg_color=C["input_bg"], border_color=C["border"],
+                     text_color=C["text"],
                      font=("Segoe UI", 12)).pack(side="left", padx=12, pady=8)
         btn(tb, "Nuevo", self._on_new, C["accent"], "➕").pack(side="left", padx=4)
         btn(tb, "Editar", self._on_edit, C["accent2"], "✏️").pack(side="left", padx=4)
         btn(tb, "Eliminar", self._on_delete, C["danger"], "🗑️").pack(side="left", padx=4)
-        btn(tb, "↺ Actualizar", self.load, C["card"]).pack(side="right", padx=12)
+        btn(tb, "↺ Actualizar", self.load, C["border"]).pack(side="right", padx=12)
 
     def _on_select(self, e):
         sel = self.tree.selection()
@@ -461,7 +518,8 @@ class ClienteForm(ctk.CTkToplevel):
     def _build(self):
         ctk.CTkLabel(self, text="✏️  Editar Cliente" if self.item else "➕  Nuevo Cliente",
                      font=("Segoe UI", 16, "bold"), text_color=C["text"]).pack(pady=(20, 8))
-        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                            border_width=1, border_color=C["border"])
         form.pack(fill="both", expand=True, padx=20, pady=4)
         form.grid_columnconfigure(1, weight=1)
         v = self.item or {}
@@ -476,7 +534,7 @@ class ClienteForm(ctk.CTkToplevel):
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar, "Guardar", self._save, C["accent"], "💾").pack(side="right", padx=4)
-        btn(bbar, "Cancelar", self.destroy, C["card"]).pack(side="right", padx=4)
+        btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
 
     def _save(self):
         if not self.razon.get():
@@ -562,7 +620,8 @@ class ProductoForm(ctk.CTkToplevel):
     def _build(self):
         ctk.CTkLabel(self, text="✏️  Editar Producto" if self.item else "➕  Nuevo Producto",
                      font=("Segoe UI", 16, "bold"), text_color=C["text"]).pack(pady=(20, 8))
-        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                            border_width=1, border_color=C["border"])
         form.pack(fill="both", expand=True, padx=20, pady=4)
         form.grid_columnconfigure(1, weight=1)
         v = self.item or {}
@@ -576,7 +635,7 @@ class ProductoForm(ctk.CTkToplevel):
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar, "Guardar", self._save, C["accent"], "💾").pack(side="right", padx=4)
-        btn(bbar, "Cancelar", self.destroy, C["card"]).pack(side="right", padx=4)
+        btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
 
     def _save(self):
         if not self.codigo.get() or not self.desc.get():
@@ -622,14 +681,14 @@ class FacturasPanel(ctk.CTkFrame):
         ctk.CTkLabel(hdr, text="📄  Facturas",
                      font=("Segoe UI", 22, "bold"), text_color=C["text"]).pack(side="left")
 
-        tb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10, height=52)
+        tb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10, height=52,
+                          border_width=1, border_color=C["border"])
         tb.pack(fill="x", padx=24, pady=4)
         tb.pack_propagate(False)
-        btn(tb, "Nueva", self._nueva, C["accent"], "➕").pack(side="left", padx=12, pady=8)
-        btn(tb, "Emitir", self._emitir, C["success"], "✅").pack(side="left", padx=4)
+        btn(tb, "Nueva Factura", self._nueva, C["accent"], "➕").pack(side="left", padx=12, pady=8)
         btn(tb, "PDF", self._pdf, C["accent2"], "📄").pack(side="left", padx=4)
         btn(tb, "Anular", self._anular, C["danger"], "❌").pack(side="left", padx=4)
-        btn(tb, "↺", self.load, C["card"]).pack(side="right", padx=12)
+        btn(tb, "↺", self.load, C["border"]).pack(side="right", padx=12)
 
         cols = ["ID","Número","Fecha","Cliente ID","Total","IVA","Condición","Estado"]
         widths = [50,150,100,90,140,110,100,120]
@@ -668,24 +727,6 @@ class FacturasPanel(ctk.CTkFrame):
 
     def _nueva(self): FacturaForm(self, on_save=self.load)
 
-    def _emitir(self):
-        if not self._sel_id: return messagebox.showinfo("Aviso","Seleccione una factura")
-        item = next((i for i in self._items if i["id"] == self._sel_id), None)
-        if item and item.get("estado") != "BORRADOR":
-            return messagebox.showinfo("Aviso","Solo se pueden emitir facturas en BORRADOR")
-        def do():
-            try:
-                r = client.post(f"/facturas/{self._sel_id}/emitir")
-                if r.status_code == 200:
-                    num = r.json().get("numero_completo","")
-                    self.after(0, lambda: (self.load(), toast(self, f"Emitida: {num}")))
-                else:
-                    msg = r.json().get("detail", r.text)
-                    self.after(0, lambda: messagebox.showerror("Error", str(msg)))
-            except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
-        threading.Thread(target=do, daemon=True).start()
-
     def _anular(self):
         if not self._sel_id: return messagebox.showinfo("Aviso","Seleccione una factura")
         if not messagebox.askyesno("Confirmar","¿Anular factura?"): return
@@ -703,14 +744,18 @@ class FacturasPanel(ctk.CTkFrame):
 
     def _pdf(self):
         if not self._sel_id: return messagebox.showinfo("Aviso","Seleccione una factura")
-        import os
         def do():
             try:
                 r = client.get(f"/facturas/{self._sel_id}/pdf")
                 if r.status_code == 200:
                     path = f"data/facturas/factura_{self._sel_id}.pdf"
+                    os.makedirs("data/facturas", exist_ok=True)
                     with open(path,"wb") as f: f.write(r.content)
-                    os.startfile(path)
+                    try:
+                        os.startfile(path)
+                    except AttributeError:
+                        import subprocess
+                        subprocess.Popen(["xdg-open", path])
                 else:
                     self.after(0, lambda: messagebox.showerror("Error", r.text))
             except Exception as e:
@@ -718,25 +763,31 @@ class FacturasPanel(ctk.CTkFrame):
         threading.Thread(target=do, daemon=True).start()
 
 
+# ── FacturaForm — Nueva factura con doble modo de carga ──────────────────────
 class FacturaForm(ctk.CTkToplevel):
-    def __init__(self, parent, on_save):
+    def __init__(self, parent, on_save, edit_data=None):
         super().__init__(parent)
         self.on_save = on_save
+        self.edit_data = edit_data
         self.title("Nueva Factura")
-        self.geometry("720x620")
+        self.geometry("800x680")
         self.configure(fg_color=C["bg"])
         self.grab_set()
         self._clientes = []
         self._productos = []
         self._detalles = []
+        if edit_data and edit_data.get("detalles"):
+            self._detalles = list(edit_data["detalles"])
         self._build()
         threading.Thread(target=self._load_data, daemon=True).start()
 
     def _build(self):
         ctk.CTkLabel(self, text="➕  Nueva Factura",
-                     font=("Segoe UI", 16, "bold"), text_color=C["text"]).pack(pady=(16,4))
+                     font=("Segoe UI", 16, "bold"), text_color=C["text"]).pack(pady=(12,4))
 
-        top = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        # ── Header: Cliente y condición ──
+        top = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                           border_width=1, border_color=C["border"])
         top.pack(fill="x", padx=16, pady=4)
         top.grid_columnconfigure(1, weight=1)
         top.grid_columnconfigure(3, weight=1)
@@ -746,7 +797,8 @@ class FacturaForm(ctk.CTkToplevel):
         self.cli_var = ctk.StringVar()
         self.cli_menu = ctk.CTkOptionMenu(top, variable=self.cli_var,
                                            values=["Cargando..."], width=280,
-                                           fg_color=C["card"], button_color=C["accent2"],
+                                           fg_color=C["input_bg"], button_color=C["accent"],
+                                           text_color=C["text"],
                                            font=("Segoe UI",11))
         self.cli_menu.grid(row=0, column=1, padx=4, pady=8, sticky="ew")
 
@@ -754,52 +806,154 @@ class FacturaForm(ctk.CTkToplevel):
         self.fecha = field(top, "Fecha", 1, col=0, default=str(date.today()))
         self.obs   = field(top, "Observación", 1, col=1, default="")
 
-        ctk.CTkLabel(self, text="  Ítems",
-                     font=("Segoe UI",13,"bold"), text_color=C["text"]).pack(anchor="w", padx=16)
+        # ── Tabs: Modo Base de Datos / Modo Manual ──
+        ctk.CTkLabel(self, text="  Agregar Ítems",
+                     font=("Segoe UI",13,"bold"), text_color=C["text"]).pack(anchor="w", padx=16, pady=(4,0))
 
-        add = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10)
-        add.pack(fill="x", padx=16, pady=4)
+        tab_frame = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10,
+                                 border_width=1, border_color=C["border"])
+        tab_frame.pack(fill="x", padx=16, pady=4)
 
-        ctk.CTkLabel(add, text="Producto", text_color=C["muted"],
-                     font=("Segoe UI",11)).grid(row=0, column=0, padx=8, pady=8)
+        # Tab buttons
+        tab_bar = ctk.CTkFrame(tab_frame, fg_color=C["border"], height=36)
+        tab_bar.pack(fill="x")
+        tab_bar.pack_propagate(False)
+        self._tab_db_btn = ctk.CTkButton(tab_bar, text="📦 Desde Base de Datos",
+                                          fg_color=C["accent"], text_color=C["text_inv"],
+                                          hover_color=C["accent2"],
+                                          font=("Segoe UI", 11, "bold"),
+                                          corner_radius=0, height=36,
+                                          command=lambda: self._switch_tab("db"))
+        self._tab_db_btn.pack(side="left", padx=(0,1))
+        self._tab_manual_btn = ctk.CTkButton(tab_bar, text="✏️ Carga Manual",
+                                              fg_color=C["panel"], text_color=C["text"],
+                                              hover_color=C["accent2"],
+                                              font=("Segoe UI", 11),
+                                              corner_radius=0, height=36,
+                                              command=lambda: self._switch_tab("manual"))
+        self._tab_manual_btn.pack(side="left")
+
+        # Tab content: Database mode
+        self._tab_db = ctk.CTkFrame(tab_frame, fg_color=C["panel"])
+        self._tab_db.pack(fill="x", padx=8, pady=8)
+
+        db_row = ctk.CTkFrame(self._tab_db, fg_color="transparent")
+        db_row.pack(fill="x")
+
+        ctk.CTkLabel(db_row, text="Producto", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=(0,4))
         self.prod_var = ctk.StringVar()
-        self.prod_menu = ctk.CTkOptionMenu(add, variable=self.prod_var,
-                                            values=["Cargando..."], width=220,
-                                            fg_color=C["card"], button_color=C["accent2"],
-                                            font=("Segoe UI",11))
-        self.prod_menu.grid(row=0, column=1, padx=4)
+        self.prod_menu = ctk.CTkOptionMenu(db_row, variable=self.prod_var,
+                                            values=["Cargando..."], width=260,
+                                            fg_color=C["input_bg"], button_color=C["accent"],
+                                            text_color=C["text"],
+                                            font=("Segoe UI",11),
+                                            command=self._on_prod_select)
+        self.prod_menu.pack(side="left", padx=4)
 
-        ctk.CTkLabel(add, text="Cant.", text_color=C["muted"],
-                     font=("Segoe UI",11)).grid(row=0, column=2, padx=4)
-        self.cant = ctk.CTkEntry(add, width=60, fg_color=C["card"], font=("Segoe UI",11))
-        self.cant.insert(0,"1")
-        self.cant.grid(row=0, column=3, padx=4)
+        ctk.CTkLabel(db_row, text="Cant.", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=4)
+        self.cant_db = ctk.CTkEntry(db_row, width=60, fg_color=C["input_bg"],
+                                     text_color=C["text"], font=("Segoe UI",11))
+        self.cant_db.insert(0,"1")
+        self.cant_db.pack(side="left", padx=4)
 
-        ctk.CTkLabel(add, text="Precio", text_color=C["muted"],
-                     font=("Segoe UI",11)).grid(row=0, column=4, padx=4)
-        self.precio_ent = ctk.CTkEntry(add, width=110, fg_color=C["card"], font=("Segoe UI",11))
-        self.precio_ent.grid(row=0, column=5, padx=4)
+        ctk.CTkLabel(db_row, text="Precio", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=4)
+        self.precio_db = ctk.CTkEntry(db_row, width=110, fg_color=C["input_bg"],
+                                       text_color=C["text"], font=("Segoe UI",11))
+        self.precio_db.pack(side="left", padx=4)
 
-        btn(add, "Agregar", self._agregar, C["success"], "➕").grid(row=0, column=6, padx=8)
+        btn(db_row, "Agregar", self._agregar_db, C["success"], "➕").pack(side="left", padx=8)
 
+        # Tab content: Manual mode
+        self._tab_manual = ctk.CTkFrame(tab_frame, fg_color=C["panel"])
+
+        man_row = ctk.CTkFrame(self._tab_manual, fg_color="transparent")
+        man_row.pack(fill="x")
+
+        ctk.CTkLabel(man_row, text="Descripción", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=(0,4))
+        self.desc_manual = ctk.CTkEntry(man_row, width=200, fg_color=C["input_bg"],
+                                         text_color=C["text"], font=("Segoe UI",11))
+        self.desc_manual.pack(side="left", padx=4)
+
+        ctk.CTkLabel(man_row, text="Precio", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=4)
+        self.precio_manual = ctk.CTkEntry(man_row, width=100, fg_color=C["input_bg"],
+                                           text_color=C["text"], font=("Segoe UI",11))
+        self.precio_manual.pack(side="left", padx=4)
+
+        ctk.CTkLabel(man_row, text="Cant.", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=4)
+        self.cant_manual = ctk.CTkEntry(man_row, width=50, fg_color=C["input_bg"],
+                                         text_color=C["text"], font=("Segoe UI",11))
+        self.cant_manual.insert(0, "1")
+        self.cant_manual.pack(side="left", padx=4)
+
+        ctk.CTkLabel(man_row, text="IVA%", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=4)
+        self.iva_manual = ctk.StringVar(value="10")
+        ctk.CTkOptionMenu(man_row, variable=self.iva_manual, values=["10","5","0"],
+                          width=60, fg_color=C["input_bg"], button_color=C["accent"],
+                          text_color=C["text"],
+                          font=("Segoe UI",11)).pack(side="left", padx=4)
+
+        btn(man_row, "Agregar", self._agregar_manual, C["success"], "➕").pack(side="left", padx=8)
+
+        # ── Items table ──
         cols = ["#","Descripción","Cant.","Precio","IVA%","Total"]
         widths = [30,240,60,120,60,130]
         tf, self.items_tree = make_table(self, cols, widths)
         tf.pack(fill="both", expand=True, padx=16, pady=4)
         self.items_tree.bind("<Delete>", lambda e: self._quitar())
 
-        bot = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10)
+        # ── Totals bar ──
+        bot = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10,
+                           border_width=1, border_color=C["border"])
         bot.pack(fill="x", padx=16, pady=4)
-        self.total_lbl = ctk.CTkLabel(bot, text="Total: Gs 0",
+        self.total_lbl = ctk.CTkLabel(bot, text="Total: Gs. 0",
                                        font=("Segoe UI",14,"bold"), text_color=C["success"])
         self.total_lbl.pack(side="right", padx=16, pady=8)
         ctk.CTkLabel(bot, text="Presione Delete para quitar un ítem",
                      text_color=C["muted"], font=("Segoe UI",10)).pack(side="left", padx=16)
 
+        # ── Bottom buttons ──
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=16, pady=8)
-        btn(bbar, "Guardar Borrador", self._save, C["accent"], "💾").pack(side="right", padx=4)
-        btn(bbar, "Cancelar", self.destroy, C["card"]).pack(side="right", padx=4)
+        btn(bbar, "Vista Previa", self._vista_previa, C["accent"], "👁️").pack(side="right", padx=4)
+        btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
+
+        # Pre-fill if editing
+        if self.edit_data:
+            self._prefill_edit()
+
+    def _switch_tab(self, tab):
+        if tab == "db":
+            self._tab_manual.pack_forget()
+            self._tab_db.pack(fill="x", padx=8, pady=8)
+            self._tab_db_btn.configure(fg_color=C["accent"], text_color=C["text_inv"],
+                                        font=("Segoe UI", 11, "bold"))
+            self._tab_manual_btn.configure(fg_color=C["panel"], text_color=C["text"],
+                                            font=("Segoe UI", 11))
+        else:
+            self._tab_db.pack_forget()
+            self._tab_manual.pack(fill="x", padx=8, pady=8)
+            self._tab_manual_btn.configure(fg_color=C["accent"], text_color=C["text_inv"],
+                                            font=("Segoe UI", 11, "bold"))
+            self._tab_db_btn.configure(fg_color=C["panel"], text_color=C["text"],
+                                        font=("Segoe UI", 11))
+
+    def _prefill_edit(self):
+        d = self.edit_data
+        if d.get("fecha_emision"):
+            self.fecha.set(d["fecha_emision"])
+        if d.get("condicion_venta"):
+            self.cond.set(d["condicion_venta"])
+        if d.get("observacion"):
+            self.obs.set(d["observacion"])
+        # Detalles are already in self._detalles
+        self._refresh_items()
 
     def _load_data(self):
         try:
@@ -809,28 +963,43 @@ class FacturaForm(ctk.CTkToplevel):
             prod_opts = [f"{p['id']} - {p['descripcion']}" for p in self._productos]
             self.after(0, lambda: self.cli_menu.configure(values=cli_opts or ["Sin clientes"]))
             self.after(0, lambda: self.prod_menu.configure(values=prod_opts or ["Sin productos"]))
-            if cli_opts:  self.after(0, lambda: self.cli_var.set(cli_opts[0]))
+            if cli_opts:
+                if self.edit_data and self.edit_data.get("cliente_id"):
+                    cid = self.edit_data["cliente_id"]
+                    match = next((o for o in cli_opts if o.startswith(f"{cid} -")), cli_opts[0])
+                    self.after(0, lambda: self.cli_var.set(match))
+                else:
+                    self.after(0, lambda: self.cli_var.set(cli_opts[0]))
             if prod_opts:
                 self.after(0, lambda: self.prod_var.set(prod_opts[0]))
                 p0 = self._productos[0]
-                self.after(0, lambda: (self.precio_ent.delete(0,"end"),
-                                       self.precio_ent.insert(0, str(int(float(p0["precio_unitario"]))))))
+                self.after(0, lambda: (self.precio_db.delete(0,"end"),
+                                       self.precio_db.insert(0, str(int(float(p0["precio_unitario"]))))))
         except Exception as e:
             self.after(0, lambda: messagebox.showerror("Error", str(e)))
 
-    def _agregar(self):
+    def _on_prod_select(self, choice):
+        try:
+            pid = int(choice.split(" - ")[0])
+            prod = next((p for p in self._productos if p["id"] == pid), None)
+            if prod:
+                self.precio_db.delete(0, "end")
+                self.precio_db.insert(0, str(int(float(prod["precio_unitario"]))))
+        except Exception:
+            pass
+
+    def _agregar_db(self):
         ps = self.prod_var.get()
         if not ps or ps in ("Cargando...","Sin productos"): return
         pid = int(ps.split(" - ")[0])
         prod = next((p for p in self._productos if p["id"] == pid), None)
         if not prod: return
         try:
-            cant  = float(self.cant.get())
-            precio = float(self.precio_ent.get().replace(".","").replace(",","."))
+            cant  = float(self.cant_db.get())
+            precio = float(self.precio_db.get().replace(".","").replace(",","."))
         except ValueError:
             return messagebox.showerror("Error","Cantidad/precio inválido")
 
-        total = cant * precio
         self._detalles.append({
             "orden": len(self._detalles)+1,
             "producto_id": pid,
@@ -839,9 +1008,39 @@ class FacturaForm(ctk.CTkToplevel):
             "precio_unitario": precio,
             "tasa_iva": prod["tasa_iva"],
         })
-        self.items_tree.insert("", "end", values=(
-            len(self._detalles), prod["descripcion"],
-            int(cant), gs(precio), f"{prod['tasa_iva']}%", gs(total)))
+        self._refresh_items()
+
+    def _agregar_manual(self):
+        desc = self.desc_manual.get().strip()
+        if not desc:
+            return messagebox.showerror("Error", "Ingrese una descripción")
+        try:
+            cant  = float(self.cant_manual.get())
+            precio = float(self.precio_manual.get().replace(".","").replace(",","."))
+        except ValueError:
+            return messagebox.showerror("Error","Cantidad/precio inválido")
+
+        self._detalles.append({
+            "orden": len(self._detalles)+1,
+            "producto_id": None,
+            "descripcion": desc,
+            "cantidad": cant,
+            "precio_unitario": precio,
+            "tasa_iva": int(self.iva_manual.get()),
+        })
+        self._refresh_items()
+        self.desc_manual.delete(0, "end")
+        self.precio_manual.delete(0, "end")
+
+    def _refresh_items(self):
+        for i in self.items_tree.get_children():
+            self.items_tree.delete(i)
+        for idx, d in enumerate(self._detalles):
+            total = d["cantidad"] * d["precio_unitario"]
+            self.items_tree.insert("", "end", values=(
+                idx+1, d["descripcion"],
+                int(d["cantidad"]), gs(d["precio_unitario"]),
+                f"{d['tasa_iva']}%", gs(total)))
         apply_zebra(self.items_tree)
         self._recalc()
 
@@ -849,18 +1048,21 @@ class FacturaForm(ctk.CTkToplevel):
         sel = self.items_tree.selection()
         if not sel: return
         idx = self.items_tree.index(sel[0])
-        self.items_tree.delete(sel[0])
         self._detalles.pop(idx)
-        self._recalc()
+        self._refresh_items()
 
     def _recalc(self):
         total = sum(d["cantidad"] * d["precio_unitario"] for d in self._detalles)
         self.total_lbl.configure(text=f"Total: {gs(total)}")
 
-    def _save(self):
-        if not self._detalles: return messagebox.showerror("Error","Agregue al menos un ítem")
+    def _vista_previa(self):
+        """Save as draft then open preview."""
+        if not self._detalles:
+            return messagebox.showerror("Error","Agregue al menos un ítem")
         cs = self.cli_var.get()
-        if not cs or cs in ("Cargando...","Sin clientes"): return messagebox.showerror("Error","Seleccione cliente")
+        if not cs or cs in ("Cargando...","Sin clientes"):
+            return messagebox.showerror("Error","Seleccione cliente")
+
         payload = {
             "fecha_emision": self.fecha.get(),
             "cliente_id": int(cs.split(" - ")[0]),
@@ -870,15 +1072,207 @@ class FacturaForm(ctk.CTkToplevel):
         }
         def do():
             try:
-                r = client.post("/facturas", json=payload)
-                if r.status_code == 201:
-                    self.after(0, lambda: (self.on_save(), self.destroy()))
+                if self.edit_data and self.edit_data.get("id"):
+                    r = client.put(f"/facturas/{self.edit_data['id']}", json=payload)
+                else:
+                    r = client.post("/facturas", json=payload)
+                if r.status_code in (200, 201):
+                    factura_data = r.json()
+                    cli_name = cs.split(" - ", 1)[1] if " - " in cs else "—"
+                    self.after(0, lambda: self._open_preview(factura_data, cli_name))
                 else:
                     msg = r.json().get("detail", r.text)
                     self.after(0, lambda: messagebox.showerror("Error", str(msg)))
             except Exception as e:
                 self.after(0, lambda: messagebox.showerror("Error", str(e)))
         threading.Thread(target=do, daemon=True).start()
+
+    def _open_preview(self, factura_data, cli_name):
+        VistaPreviewFactura(self, factura_data, cli_name,
+                            on_emitir_done=lambda: (self.on_save(), self.destroy()),
+                            on_edit=lambda data: self._return_to_edit(data))
+
+    def _return_to_edit(self, data):
+        # Update edit data and reload detalles
+        self.edit_data = data
+        if data.get("detalles"):
+            self._detalles = list(data["detalles"])
+            self._refresh_items()
+
+
+# ── Vista Previa de Factura ──────────────────────────────────────────────────
+class VistaPreviewFactura(ctk.CTkToplevel):
+    def __init__(self, parent, factura, cli_name, on_emitir_done, on_edit):
+        super().__init__(parent)
+        self.factura = factura
+        self.cli_name = cli_name
+        self.on_emitir_done = on_emitir_done
+        self.on_edit = on_edit
+        self.title("Vista Previa — Factura")
+        self.geometry("700x650")
+        self.configure(fg_color=C["bg"])
+        self.grab_set()
+        self._build()
+
+    def _build(self):
+        # Scrollable content
+        scroll = ctk.CTkScrollableFrame(self, fg_color=C["bg"])
+        scroll.pack(fill="both", expand=True, padx=16, pady=(8, 4))
+
+        # ── Company header ──
+        header = ctk.CTkFrame(scroll, fg_color=C["header"], corner_radius=10)
+        header.pack(fill="x", pady=(0, 8))
+        h_inner = ctk.CTkFrame(header, fg_color="transparent")
+        h_inner.pack(fill="x", padx=16, pady=12)
+        logo_img = _load_logo(100, 33)
+        if logo_img:
+            ctk.CTkLabel(h_inner, image=logo_img, text="").pack(side="left")
+        ctk.CTkLabel(h_inner, text="  FACTURA", font=("Segoe UI", 18, "bold"),
+                     text_color=C["text_inv"]).pack(side="left", padx=8)
+
+        estado = self.factura.get("estado", "BORRADOR")
+        estado_color = C["warning"] if estado == "BORRADOR" else C["success"]
+        ctk.CTkLabel(h_inner, text=f"  {estado}  ", font=("Segoe UI", 11, "bold"),
+                     fg_color=estado_color, text_color=C["text_inv"],
+                     corner_radius=6).pack(side="right")
+
+        # ── Factura info ──
+        info = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
+                            border_width=1, border_color=C["border"])
+        info.pack(fill="x", pady=4)
+        info.grid_columnconfigure((0,1,2,3), weight=1)
+
+        num = self.factura.get("numero_completo") or "Pendiente"
+        pairs = [
+            ("Número:", num),
+            ("Fecha:", self.factura.get("fecha_emision", "—")),
+            ("Cliente:", self.cli_name),
+            ("Condición:", self.factura.get("condicion_venta", "—")),
+        ]
+        for i, (lbl, val) in enumerate(pairs):
+            r, c = divmod(i, 2)
+            ctk.CTkLabel(info, text=lbl, text_color=C["muted"],
+                         font=("Segoe UI", 10)).grid(row=r, column=c*2, padx=(12,4), pady=6, sticky="w")
+            ctk.CTkLabel(info, text=val, text_color=C["text"],
+                         font=("Segoe UI", 11, "bold")).grid(row=r, column=c*2+1, padx=(0,12), pady=6, sticky="w")
+
+        # ── Items table ──
+        items_frame = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
+                                   border_width=1, border_color=C["border"])
+        items_frame.pack(fill="x", pady=4)
+
+        ctk.CTkLabel(items_frame, text="Detalle de Ítems", font=("Segoe UI", 12, "bold"),
+                     text_color=C["text"]).pack(anchor="w", padx=12, pady=(8,4))
+
+        # Table header
+        th = ctk.CTkFrame(items_frame, fg_color=C["header"], corner_radius=0)
+        th.pack(fill="x", padx=8)
+        cols_def = [("#", 30), ("Descripción", 220), ("Cant.", 50), ("P. Unit.", 100),
+                    ("IVA%", 50), ("Subtotal", 110)]
+        for label, w in cols_def:
+            ctk.CTkLabel(th, text=label, text_color=C["text_inv"],
+                         font=("Segoe UI", 10, "bold"), width=w).pack(side="left", padx=4, pady=4)
+
+        # Table rows
+        detalles = self.factura.get("detalles", [])
+        for i, d in enumerate(detalles):
+            bg = C["row_even"] if i % 2 == 0 else C["row_odd"]
+            row = ctk.CTkFrame(items_frame, fg_color=bg, corner_radius=0)
+            row.pack(fill="x", padx=8)
+            total_l = float(d.get("total_linea", 0) or (d.get("cantidad",0) * d.get("precio_unitario",0)))
+            vals = [
+                (str(d.get("orden", i+1)), 30),
+                (d.get("descripcion",""), 220),
+                (str(int(float(d.get("cantidad",0)))), 50),
+                (gs(d.get("precio_unitario",0)), 100),
+                (f"{d.get('tasa_iva',10)}%", 50),
+                (gs(total_l), 110),
+            ]
+            for val, w in vals:
+                ctk.CTkLabel(row, text=val, text_color=C["text"],
+                             font=("Segoe UI", 10), width=w).pack(side="left", padx=4, pady=3)
+
+        # ── Totals ──
+        totals = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
+                              border_width=1, border_color=C["border"])
+        totals.pack(fill="x", pady=4)
+        totals.grid_columnconfigure(1, weight=1)
+
+        total_rows = [
+            ("Subtotal Exenta:", gs(self.factura.get("subtotal_exenta", 0))),
+            ("Subtotal Gravada 5%:", gs(self.factura.get("subtotal_gravada_5", 0))),
+            ("Subtotal Gravada 10%:", gs(self.factura.get("subtotal_gravada_10", 0))),
+            ("IVA 5%:", gs(self.factura.get("iva_5", 0))),
+            ("IVA 10%:", gs(self.factura.get("iva_10", 0))),
+            ("Total IVA:", gs(self.factura.get("total_iva", 0))),
+        ]
+        for r, (lbl, val) in enumerate(total_rows):
+            ctk.CTkLabel(totals, text=lbl, text_color=C["muted"],
+                         font=("Segoe UI", 10)).grid(row=r, column=0, padx=12, pady=2, sticky="e")
+            ctk.CTkLabel(totals, text=val, text_color=C["text"],
+                         font=("Segoe UI", 10, "bold")).grid(row=r, column=1, padx=12, pady=2, sticky="e")
+
+        # Grand total
+        gt = ctk.CTkFrame(totals, fg_color=C["accent"], corner_radius=6)
+        gt.grid(row=len(total_rows), column=0, columnspan=2, sticky="ew", padx=8, pady=(8,12))
+        ctk.CTkLabel(gt, text=f"TOTAL:  {gs(self.factura.get('total', 0))}",
+                     text_color=C["text_inv"],
+                     font=("Segoe UI", 16, "bold")).pack(pady=8)
+
+        # ── Buttons ──
+        bbar = ctk.CTkFrame(self, fg_color="transparent")
+        bbar.pack(fill="x", padx=16, pady=8)
+
+        emitir_btn = ctk.CTkButton(bbar, text="✅  Emitir Factura",
+                                    command=self._emitir,
+                                    fg_color=C["accent"], hover_color=C["header"],
+                                    text_color=C["text_inv"],
+                                    font=("Segoe UI", 14, "bold"),
+                                    corner_radius=8, height=44, width=200)
+        emitir_btn.pack(side="right", padx=4)
+
+        btn(bbar, "✏️ Editar", self._editar, C["accent2"]).pack(side="right", padx=4)
+        btn(bbar, "❌ Cancelar", self._cancelar, C["danger"]).pack(side="right", padx=4)
+
+    def _emitir(self):
+        fid = self.factura.get("id")
+        if not fid: return
+        def do():
+            try:
+                r = client.post(f"/facturas/{fid}/emitir")
+                if r.status_code == 200:
+                    num = r.json().get("numero_completo","")
+                    self.after(0, lambda: self._emision_ok(num))
+                else:
+                    msg = r.json().get("detail", r.text)
+                    self.after(0, lambda: messagebox.showerror("Error", str(msg)))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+        threading.Thread(target=do, daemon=True).start()
+
+    def _emision_ok(self, num):
+        messagebox.showinfo("Factura Emitida",
+                            f"Factura emitida exitosamente.\nNúmero: {num}")
+        self.on_emitir_done()
+        self.destroy()
+
+    def _editar(self):
+        self.on_edit(self.factura)
+        self.destroy()
+
+    def _cancelar(self):
+        fid = self.factura.get("id")
+        if fid and self.factura.get("estado") == "BORRADOR":
+            if messagebox.askyesno("Confirmar", "¿Anular el borrador y cerrar?"):
+                def do():
+                    try:
+                        client.post(f"/facturas/{fid}/anular")
+                    except Exception:
+                        pass
+                    self.after(0, lambda: (self.on_emitir_done(), self.destroy()))
+                threading.Thread(target=do, daemon=True).start()
+        else:
+            self.destroy()
 
 
 # ── Proveedores ───────────────────────────────────────────────────────────────
@@ -925,7 +1319,8 @@ class ProveedorForm(ctk.CTkToplevel):
     def _build(self):
         ctk.CTkLabel(self, text="✏️  Proveedor" if self.item else "➕  Nuevo Proveedor",
                      font=("Segoe UI",16,"bold"), text_color=C["text"]).pack(pady=(20,8))
-        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                            border_width=1, border_color=C["border"])
         form.pack(fill="both", expand=True, padx=20, pady=4)
         form.grid_columnconfigure(1, weight=1)
         v = self.item or {}
@@ -938,7 +1333,7 @@ class ProveedorForm(ctk.CTkToplevel):
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar,"Guardar",self._save,C["accent"],"💾").pack(side="right",padx=4)
-        btn(bbar,"Cancelar",self.destroy,C["card"]).pack(side="right",padx=4)
+        btn(bbar,"Cancelar",self.destroy,C["border"]).pack(side="right",padx=4)
 
     def _save(self):
         if not self.cod.get() or not self.nombre.get():
@@ -976,10 +1371,11 @@ class ComprasPanel(ctk.CTkFrame):
         ctk.CTkLabel(hdr, text="🛒  Compras",
                      font=("Segoe UI",22,"bold"), text_color=C["text"]).pack(side="left")
 
-        tb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10, height=52)
+        tb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10, height=52,
+                          border_width=1, border_color=C["border"])
         tb.pack(fill="x", padx=24, pady=4)
         tb.pack_propagate(False)
-        btn(tb,"↺",self.load,C["card"]).pack(side="right",padx=12)
+        btn(tb,"↺",self.load,C["border"]).pack(side="right",padx=12)
 
         cols = ["Nro","Fecha","Proveedor","Total","Estado"]
         widths = [80,110,250,140,110]
@@ -1020,7 +1416,8 @@ class CajaPanel(ctk.CTkFrame):
         ctk.CTkLabel(hdr, text="💰  Caja",
                      font=("Segoe UI",22,"bold"), text_color=C["text"]).pack(side="left")
 
-        card = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        card = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                            border_width=1, border_color=C["border"])
         card.pack(fill="x", padx=24, pady=8)
 
         top = ctk.CTkFrame(card, fg_color="transparent")
@@ -1032,7 +1429,7 @@ class CajaPanel(ctk.CTkFrame):
         bbar.pack(side="right")
         btn(bbar,"Abrir Caja",  self._abrir,  C["success"],"🔓").pack(side="left",padx=4)
         btn(bbar,"Cerrar Caja", self._cerrar, C["danger"], "🔒").pack(side="left",padx=4)
-        btn(bbar,"↺",           self.load,    C["card"]).pack(side="left",padx=4)
+        btn(bbar,"↺",           self.load,    C["border"]).pack(side="left",padx=4)
 
         metrics = ctk.CTkFrame(card, fg_color="transparent")
         metrics.pack(fill="x", padx=16, pady=(0,12))
@@ -1040,15 +1437,17 @@ class CajaPanel(ctk.CTkFrame):
         defs = [("Saldo Inicial",C["muted"]),("Ingresos",C["success"]),
                 ("Egresos",C["danger"]),("Saldo Final",C["accent"])]
         for i,(lbl,color) in enumerate(defs):
-            f = ctk.CTkFrame(metrics, fg_color=C["card"], corner_radius=8)
+            f = ctk.CTkFrame(metrics, fg_color=C["input_bg"], corner_radius=8,
+                             border_width=1, border_color=C["border"])
             f.grid(row=0, column=i, padx=6, sticky="ew")
             metrics.grid_columnconfigure(i, weight=1)
             ctk.CTkLabel(f, text=lbl, text_color=C["muted"], font=("Segoe UI",10)).pack(pady=(8,0))
-            v = ctk.CTkLabel(f, text="Gs 0", text_color=color, font=("Segoe UI",14,"bold"))
+            v = ctk.CTkLabel(f, text="Gs. 0", text_color=color, font=("Segoe UI",14,"bold"))
             v.pack(pady=(0,8))
             self.m[lbl] = v
 
-        mv = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        mv = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                          border_width=1, border_color=C["border"])
         mv.pack(fill="x", padx=24, pady=4)
         ctk.CTkLabel(mv, text="Registrar Movimiento",
                      font=("Segoe UI",13,"bold"), text_color=C["text"]).pack(anchor="w",padx=16,pady=(12,4))
@@ -1059,15 +1458,18 @@ class CajaPanel(ctk.CTkFrame):
         ctk.CTkLabel(row,text="Tipo",text_color=C["muted"],font=("Segoe UI",11)).pack(side="left",padx=(0,4))
         self.mv_tipo = ctk.StringVar(value="INGRESO")
         ctk.CTkOptionMenu(row,variable=self.mv_tipo,values=["INGRESO","EGRESO"],
-                          width=120,fg_color=C["card"],button_color=C["accent2"],
+                          width=120,fg_color=C["input_bg"],button_color=C["accent"],
+                          text_color=C["text"],
                           font=("Segoe UI",11)).pack(side="left",padx=4)
 
         ctk.CTkLabel(row,text="Monto Gs",text_color=C["muted"],font=("Segoe UI",11)).pack(side="left",padx=(8,4))
-        self.mv_monto = ctk.CTkEntry(row,width=120,fg_color=C["card"],font=("Segoe UI",11))
+        self.mv_monto = ctk.CTkEntry(row,width=120,fg_color=C["input_bg"],
+                                      text_color=C["text"],font=("Segoe UI",11))
         self.mv_monto.pack(side="left",padx=4)
 
         ctk.CTkLabel(row,text="Concepto",text_color=C["muted"],font=("Segoe UI",11)).pack(side="left",padx=(8,4))
-        self.mv_concepto = ctk.CTkEntry(row,width=220,fg_color=C["card"],font=("Segoe UI",11))
+        self.mv_concepto = ctk.CTkEntry(row,width=220,fg_color=C["input_bg"],
+                                         text_color=C["text"],font=("Segoe UI",11))
         self.mv_concepto.pack(side="left",padx=4)
 
         btn(row,"Registrar",self._movimiento,C["accent"],"✓").pack(side="left",padx=8)
@@ -1150,7 +1552,8 @@ class AbrirCajaDialog(ctk.CTkToplevel):
     def _build(self):
         ctk.CTkLabel(self, text="🔓  Abrir Caja del Día",
                      font=("Segoe UI",16,"bold"), text_color=C["text"]).pack(pady=(24,12))
-        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        form = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                            border_width=1, border_color=C["border"])
         form.pack(fill="x", padx=20, pady=4)
         form.grid_columnconfigure(1, weight=1)
         self.usuario = field(form,"Usuario",0,default="admin")
@@ -1158,7 +1561,7 @@ class AbrirCajaDialog(ctk.CTkToplevel):
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=20, pady=12)
         btn(bbar,"Abrir",self._abrir,C["success"],"🔓").pack(side="right",padx=4)
-        btn(bbar,"Cancelar",self.destroy,C["card"]).pack(side="right",padx=4)
+        btn(bbar,"Cancelar",self.destroy,C["border"]).pack(side="right",padx=4)
 
     def _abrir(self):
         try:
@@ -1191,18 +1594,21 @@ class ReportesPanel(ctk.CTkFrame):
         ctk.CTkLabel(hdr, text="📈  Reportes",
                      font=("Segoe UI",22,"bold"), text_color=C["text"]).pack(side="left")
 
-        filtros = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12)
+        filtros = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
+                               border_width=1, border_color=C["border"])
         filtros.pack(fill="x", padx=24, pady=8)
         row = ctk.CTkFrame(filtros, fg_color="transparent")
         row.pack(fill="x", padx=16, pady=12)
 
         ctk.CTkLabel(row,text="Desde:",text_color=C["muted"],font=("Segoe UI",11)).pack(side="left",padx=(0,4))
-        self.desde = ctk.CTkEntry(row,width=110,fg_color=C["card"],font=("Segoe UI",11))
+        self.desde = ctk.CTkEntry(row,width=110,fg_color=C["input_bg"],
+                                   text_color=C["text"],font=("Segoe UI",11))
         self.desde.insert(0,f"{date.today().year}-01-01")
         self.desde.pack(side="left",padx=4)
 
         ctk.CTkLabel(row,text="Hasta:",text_color=C["muted"],font=("Segoe UI",11)).pack(side="left",padx=(8,4))
-        self.hasta = ctk.CTkEntry(row,width=110,fg_color=C["card"],font=("Segoe UI",11))
+        self.hasta = ctk.CTkEntry(row,width=110,fg_color=C["input_bg"],
+                                   text_color=C["text"],font=("Segoe UI",11))
         self.hasta.insert(0,str(date.today()))
         self.hasta.pack(side="left",padx=4)
 
@@ -1276,23 +1682,250 @@ class ReportesPanel(ctk.CTkFrame):
         threading.Thread(target=do,daemon=True).start()
 
 
+# ── Configuración ─────────────────────────────────────────────────────────────
+class ConfiguracionPanel(ctk.CTkFrame):
+    def __init__(self, master):
+        super().__init__(master, fg_color=C["bg"])
+        self._admin_unlocked = False
+        self._empresa = {}
+        self._build()
+        threading.Thread(target=self._load_empresa, daemon=True).start()
+
+    def _build(self):
+        scroll = ctk.CTkScrollableFrame(self, fg_color=C["bg"])
+        scroll.pack(fill="both", expand=True, padx=24, pady=(20, 8))
+
+        ctk.CTkLabel(scroll, text="⚙️  Configuración",
+                     font=("Segoe UI", 22, "bold"), text_color=C["text"]).pack(anchor="w", pady=(0, 12))
+
+        # ── General section ──
+        gen = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=12,
+                           border_width=1, border_color=C["border"])
+        gen.pack(fill="x", pady=4)
+        ctk.CTkLabel(gen, text="Datos Generales de la Empresa",
+                     font=("Segoe UI", 14, "bold"), text_color=C["text"]).pack(anchor="w", padx=16, pady=(12,4))
+
+        # Logo display
+        logo_frame = ctk.CTkFrame(gen, fg_color="transparent")
+        logo_frame.pack(fill="x", padx=16, pady=4)
+        logo_img = _load_logo(120, 40)
+        if logo_img:
+            ctk.CTkLabel(logo_frame, image=logo_img, text="").pack(side="left")
+        ctk.CTkLabel(logo_frame, text="  Logo actual: LOGO-CV.jpg",
+                     text_color=C["muted"], font=("Segoe UI", 10)).pack(side="left", padx=8)
+
+        form_gen = ctk.CTkFrame(gen, fg_color="transparent")
+        form_gen.pack(fill="x", padx=8, pady=4)
+        form_gen.grid_columnconfigure(1, weight=1)
+        form_gen.grid_columnconfigure(3, weight=1)
+
+        self.gen_razon = field(form_gen, "Razón Social", 0, default="")
+        self.gen_nombre = field(form_gen, "Nombre Comercial", 1, default="")
+        self.gen_dir = field(form_gen, "Dirección", 2, wide=True, default="")
+        self.gen_tel = field(form_gen, "Teléfono", 3, default="")
+        self.gen_email = field(form_gen, "Email", 3, col=1, default="")
+        self.gen_ciudad = field(form_gen, "Ciudad", 4, default="")
+
+        gen_btns = ctk.CTkFrame(gen, fg_color="transparent")
+        gen_btns.pack(fill="x", padx=16, pady=(4,12))
+        btn(gen_btns, "Guardar datos generales", self._save_general, C["accent"], "💾").pack(side="left", padx=4)
+        btn(gen_btns, "Probar conexión al servidor", self._test_connection, C["accent2"], "🔌").pack(side="left", padx=4)
+        self.conn_lbl = ctk.CTkLabel(gen_btns, text="", font=("Segoe UI", 11))
+        self.conn_lbl.pack(side="left", padx=8)
+
+        # ── Separator ──
+        sep = ctk.CTkFrame(scroll, fg_color="transparent")
+        sep.pack(fill="x", pady=12)
+        ctk.CTkLabel(sep, text="─────────── 🔒 Configuración Fiscal (requiere clave de administrador) ───────────",
+                     text_color=C["muted"], font=("Segoe UI", 10)).pack()
+
+        # ── Fiscal section ──
+        self._fiscal_frame = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=12,
+                                          border_width=1, border_color=C["border"])
+        self._fiscal_frame.pack(fill="x", pady=4)
+
+        # Lock UI
+        self._lock_frame = ctk.CTkFrame(self._fiscal_frame, fg_color="transparent")
+        self._lock_frame.pack(fill="x", padx=16, pady=16)
+        ctk.CTkLabel(self._lock_frame, text="🔒  Sección bloqueada",
+                     font=("Segoe UI", 13, "bold"), text_color=C["text"]).pack(anchor="w")
+        ctk.CTkLabel(self._lock_frame, text="Ingrese la clave de administrador para acceder a la configuración fiscal",
+                     text_color=C["muted"], font=("Segoe UI", 11)).pack(anchor="w", pady=(4,8))
+        pw_row = ctk.CTkFrame(self._lock_frame, fg_color="transparent")
+        pw_row.pack(anchor="w")
+        self.admin_pw = ctk.CTkEntry(pw_row, placeholder_text="Clave de administrador",
+                                      show="•", width=250, height=38,
+                                      fg_color=C["input_bg"], border_color=C["border"],
+                                      text_color=C["text"], font=("Segoe UI", 12))
+        self.admin_pw.pack(side="left", padx=(0,8))
+        btn(pw_row, "Desbloquear", self._unlock, C["accent"], "🔓").pack(side="left")
+        self.admin_err = ctk.CTkLabel(self._lock_frame, text="", text_color=C["danger"],
+                                       font=("Segoe UI", 11))
+        self.admin_err.pack(anchor="w", pady=4)
+
+        # Unlocked fiscal fields (hidden initially)
+        self._fiscal_fields = ctk.CTkFrame(self._fiscal_frame, fg_color="transparent")
+
+        ctk.CTkLabel(self._fiscal_fields, text="🔓  Configuración Fiscal Desbloqueada",
+                     font=("Segoe UI", 13, "bold"), text_color=C["success"]).pack(anchor="w", padx=16, pady=(12,4))
+
+        ff = ctk.CTkFrame(self._fiscal_fields, fg_color="transparent")
+        ff.pack(fill="x", padx=8, pady=4)
+        ff.grid_columnconfigure(1, weight=1)
+        ff.grid_columnconfigure(3, weight=1)
+
+        self.f_ruc = field(ff, "RUC del Emisor", 0, default="")
+        self.f_timbrado = field(ff, "Timbrado", 0, col=1, default="")
+        self.f_timb_inicio = field(ff, "Fecha Inicio Timbrado", 1, default="")
+        self.f_timb_fin = field(ff, "Fecha Fin Timbrado", 1, col=1, default="")
+        self.f_estab = field(ff, "Establecimiento", 2, default="001")
+        self.f_punto = field(ff, "Punto Expedición", 2, col=1, default="001")
+        self.f_actividad = field(ff, "Actividad Económica", 3, wide=True, default="")
+        self.f_sifen = field(ff, "SIFEN Habilitado", 4, choices=["No","Sí"], default="No")
+        self.f_tipo_contrib = field(ff, "Tipo Contribuyente", 4, col=1,
+                                     choices=["1 - Física","2 - Jurídica"], default="1 - Física")
+
+        fiscal_btns = ctk.CTkFrame(self._fiscal_fields, fg_color="transparent")
+        fiscal_btns.pack(fill="x", padx=16, pady=(4,12))
+        btn(fiscal_btns, "Guardar configuración fiscal", self._save_fiscal, C["accent"], "💾").pack(side="left", padx=4)
+        btn(fiscal_btns, "Bloquear nuevamente", self._lock, C["danger"], "🔒").pack(side="left", padx=4)
+
+    def _load_empresa(self):
+        try:
+            r = client.get("/config/empresa")
+            if r.status_code == 200:
+                self._empresa = r.json()
+                self.after(0, self._fill_fields)
+        except Exception:
+            pass
+
+    def _fill_fields(self):
+        e = self._empresa
+        if not e or not e.get("id"):
+            return
+        self.gen_razon.set(e.get("razon_social","") or "")
+        self.gen_nombre.set(e.get("nombre_fantasia","") or "")
+        self.gen_dir.set(e.get("direccion","") or "")
+        self.gen_tel.set(e.get("telefono","") or "")
+        self.gen_email.set(e.get("email","") or "")
+        self.gen_ciudad.set(e.get("ciudad","") or "")
+        # Fiscal fields
+        self.f_ruc.set(e.get("ruc","") or "")
+        self.f_timbrado.set(e.get("timbrado","") or "")
+        self.f_timb_inicio.set(e.get("timbrado_fecha_inicio","") or "")
+        self.f_timb_fin.set(e.get("timbrado_fecha_fin","") or "")
+        self.f_estab.set(e.get("establecimiento","001") or "001")
+        self.f_punto.set(e.get("punto_expedicion","001") or "001")
+        self.f_actividad.set(e.get("actividad_economica","") or "")
+        self.f_sifen.set("Sí" if e.get("sifen_habilitado") else "No")
+
+    def _save_general(self):
+        payload = {
+            "razon_social": self.gen_razon.get() or None,
+            "nombre_fantasia": self.gen_nombre.get() or None,
+            "direccion": self.gen_dir.get() or None,
+            "telefono": self.gen_tel.get() or None,
+            "email": self.gen_email.get() or None,
+            "ciudad": self.gen_ciudad.get() or None,
+        }
+        def do():
+            try:
+                r = client.put("/config/empresa", json=payload)
+                if r.status_code == 200:
+                    self.after(0, lambda: toast(self, "Datos generales guardados"))
+                else:
+                    msg = r.json().get("detail", r.text)
+                    self.after(0, lambda: messagebox.showerror("Error", str(msg)))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+        threading.Thread(target=do, daemon=True).start()
+
+    def _test_connection(self):
+        def do():
+            try:
+                r = requests.get("http://localhost:8000/", timeout=5)
+                if r.status_code == 200:
+                    self.after(0, lambda: self.conn_lbl.configure(
+                        text="✓ Servidor conectado", text_color=C["success"]))
+                else:
+                    self.after(0, lambda: self.conn_lbl.configure(
+                        text="✗ Error de conexión", text_color=C["danger"]))
+            except Exception:
+                self.after(0, lambda: self.conn_lbl.configure(
+                    text="✗ No se pudo conectar", text_color=C["danger"]))
+        threading.Thread(target=do, daemon=True).start()
+
+    def _unlock(self):
+        pw = self.admin_pw.get()
+        if not pw:
+            self.admin_err.configure(text="Ingrese la clave")
+            return
+        def do():
+            try:
+                r = client.post("/config/verify-admin", json={"password": pw})
+                if r.status_code == 200 and r.json().get("valid"):
+                    self._admin_unlocked = True
+                    self.after(0, self._show_fiscal)
+                else:
+                    self.after(0, lambda: self.admin_err.configure(text="Clave incorrecta"))
+            except Exception as e:
+                self.after(0, lambda: self.admin_err.configure(text=str(e)))
+        threading.Thread(target=do, daemon=True).start()
+
+    def _show_fiscal(self):
+        self._lock_frame.pack_forget()
+        self._fiscal_fields.pack(fill="x")
+        self.admin_err.configure(text="")
+
+    def _lock(self):
+        self._admin_unlocked = False
+        self._fiscal_fields.pack_forget()
+        self._lock_frame.pack(fill="x", padx=16, pady=16)
+        self.admin_pw.delete(0, "end")
+
+    def _save_fiscal(self):
+        sifen = self.f_sifen.get() == "Sí"
+        payload = {
+            "ruc": self.f_ruc.get() or None,
+            "timbrado": self.f_timbrado.get() or None,
+            "timbrado_fecha_inicio": self.f_timb_inicio.get() or None,
+            "timbrado_fecha_fin": self.f_timb_fin.get() or None,
+            "establecimiento": self.f_estab.get() or None,
+            "punto_expedicion": self.f_punto.get() or None,
+            "actividad_economica": self.f_actividad.get() or None,
+            "sifen_habilitado": sifen,
+        }
+        def do():
+            try:
+                r = client.put("/config/empresa", json=payload)
+                if r.status_code == 200:
+                    self.after(0, lambda: toast(self, "Configuración fiscal guardada"))
+                else:
+                    msg = r.json().get("detail", r.text)
+                    self.after(0, lambda: messagebox.showerror("Error", str(msg)))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+        threading.Thread(target=do, daemon=True).start()
+
+
 # ── App Principal ─────────────────────────────────────────────────────────────
 PANELS = {
-    "Dashboard":   DashboardPanel,
-    "Facturas":    FacturasPanel,
-    "Clientes":    ClientesPanel,
-    "Productos":   ProductosPanel,
-    "Proveedores": ProveedoresPanel,
-    "Compras":     ComprasPanel,
-    "Caja":        CajaPanel,
-    "Reportes":    ReportesPanel,
+    "Dashboard":      DashboardPanel,
+    "Facturas":       FacturasPanel,
+    "Clientes":       ClientesPanel,
+    "Productos":      ProductosPanel,
+    "Proveedores":    ProveedoresPanel,
+    "Compras":        ComprasPanel,
+    "Caja":           CajaPanel,
+    "Reportes":       ReportesPanel,
+    "Configuración":  ConfiguracionPanel,
 }
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Sistema de Facturación Paraguay")
+        self.title("FacturaPY — Sistema de Gestión Comercial")
         self.geometry("1280x760")
         self.minsize(1024,640)
         self.configure(fg_color=C["bg"])
@@ -1307,24 +1940,42 @@ class App(ctk.CTk):
     def _show_main(self):
         self._login_frame.destroy()
 
-        self._sidebar = Sidebar(self, on_select=self._navigate)
+        # Header bar
+        header = ctk.CTkFrame(self, fg_color=C["header"], corner_radius=0, height=50)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        h_left = ctk.CTkFrame(header, fg_color="transparent")
+        h_left.pack(side="left", padx=16)
+        logo_img = _load_logo(120, 40)
+        if logo_img:
+            ctk.CTkLabel(h_left, image=logo_img, text="").pack(side="left")
+        ctk.CTkLabel(h_left, text="  FacturaPY", font=("Segoe UI", 14, "bold"),
+                     text_color=C["text_inv"]).pack(side="left")
+
+        h_right = ctk.CTkFrame(header, fg_color="transparent")
+        h_right.pack(side="right", padx=16)
+        ctk.CTkLabel(h_right, text=f"👤 {client.username}",
+                     font=("Segoe UI", 11), text_color=C["text_inv"]).pack(side="left", padx=8)
+        ctk.CTkButton(h_right, text="Cerrar Sesión", command=self._logout,
+                      fg_color=C["danger"], hover_color="#8B0000",
+                      text_color=C["text_inv"],
+                      font=("Segoe UI", 11), corner_radius=6,
+                      height=30, width=110).pack(side="left")
+
+        # Body
+        body = ctk.CTkFrame(self, fg_color=C["bg"])
+        body.pack(fill="both", expand=True)
+
+        self._sidebar = Sidebar(body, on_select=self._navigate)
         self._sidebar.pack(side="left", fill="y")
-        ctk.CTkFrame(self, fg_color=C["border"], width=1).pack(side="left", fill="y")
+        ctk.CTkFrame(body, fg_color=C["border"], width=1).pack(side="left", fill="y")
 
-        content = ctk.CTkFrame(self, fg_color=C["bg"])
-        content.pack(side="left", fill="both", expand=True)
+        self._area = ctk.CTkFrame(body, fg_color=C["bg"])
+        self._area.pack(side="left", fill="both", expand=True)
 
-        topbar = ctk.CTkFrame(content, fg_color=C["panel"], corner_radius=0, height=46)
-        topbar.pack(fill="x")
-        topbar.pack_propagate(False)
-        ctk.CTkLabel(topbar, text="Sistema de Facturación Paraguay",
-                     font=("Segoe UI",12), text_color=C["muted"]).pack(side="left",padx=16)
-        ctk.CTkLabel(topbar, text="● Conectado",
-                     font=("Segoe UI",11), text_color=C["success"]).pack(side="right",padx=16)
-
-        self._area = ctk.CTkFrame(content, fg_color=C["bg"])
-        self._area.pack(fill="both", expand=True)
-
+        self._header_ref = header
+        self._body_ref = body
         self._sidebar.select("Dashboard")
 
     def _navigate(self, name):
@@ -1334,3 +1985,15 @@ class App(ctk.CTk):
             self._cache[name] = PANELS[name](self._area)
         self._current = self._cache[name]
         self._current.pack(fill="both", expand=True)
+
+    def _logout(self):
+        if messagebox.askyesno("Cerrar Sesión", "¿Desea cerrar sesión?"):
+            client.token = None
+            client.s.headers.pop("Authorization", None)
+            self._cache.clear()
+            if self._current:
+                self._current.pack_forget()
+                self._current = None
+            self._header_ref.destroy()
+            self._body_ref.destroy()
+            self._show_login()

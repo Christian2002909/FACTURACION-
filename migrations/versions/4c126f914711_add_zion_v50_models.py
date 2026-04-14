@@ -1,4 +1,4 @@
-"""Add Zion v50 models
+"""Add FacturaPY v1.0 models
 
 Revision ID: 4c126f914711
 Revises: 

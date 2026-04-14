@@ -1,4 +1,4 @@
-# 🗺️ PLAN COMPLETO — Sistema FACTURACION- (Paraguay)
+# PLAN COMPLETO — FacturaPY
 # Repo: Christian2002909/FACTURACION-
 # Fecha: 2026-04-12
 # Stack: Python/FastAPI + SQLAlchemy + ReportLab + Tkinter GUI
@@ -9,7 +9,7 @@
 ## 📁 ESTRUCTURA ACTUAL DEL REPO
 
 ```
-FACTURACION-/
+FacturaPY/
 ├── app/
 │   ├── __init__.py
 │   ├── cache.py

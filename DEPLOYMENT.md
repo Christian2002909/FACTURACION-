@@ -1,4 +1,4 @@
-# Guía de Despliegue — Sistema de Facturación Paraguay
+# Guía de Despliegue — FacturaPY
 
 ## En tu Linux (Cahyos KDE)
 
@@ -20,7 +20,7 @@ Se abre la GUI Tkinter. Puedes:
 ./build.sh
 ```
 
-Crea: `dist/FACTURACION/FACTURACION.exe` (≈150MB con Python embebido)
+Crea: `dist/FacturaPY/FacturaPY.exe` (≈150MB con Python embebido)
 
 ### 3. Generar instalador Windows
 
@@ -32,7 +32,7 @@ sudo apt install nsis
 ./build.sh --nsis
 ```
 
-Crea: `dist/FACTURACION-setup.exe` (≈80MB, comprimido)
+Crea: `dist/FacturaPY-setup.exe` (≈80MB, comprimido)
 
 ---
 
@@ -40,21 +40,21 @@ Crea: `dist/FACTURACION-setup.exe` (≈80MB, comprimido)
 
 ### Instalación
 
-1. Cliente descarga `FACTURACION-setup.exe`
+1. Cliente descarga `FacturaPY-setup.exe`
 2. Ejecuta el instalador
-3. Se instala en `C:\Program Files\FACTURACION\`
+3. Se instala en `C:\Program Files\FacturaPY\`
 4. Crea acceso directo en Inicio y Escritorio
 5. Al abrir, configura su empresa y empieza a facturar
 
 ### Estructura de carpetas (después de instalar)
 
 ```
-C:\Program Files\FACTURACION\
-├── FACTURACION.exe          ← ejecutable
+C:\Program Files\FacturaPY\
+├── FacturaPY.exe          ← ejecutable
 ├── python*                   ← runtime Python embebido
 └── ...
 
-C:\Users\{Usuario}\AppData\Roaming\FACTURACION\
+C:\Users\{Usuario}\AppData\Roaming\FacturaPY\
 └── data/
     ├── facturas/            ← PDFs generados
     ├── certificados/        ← Si quiere SIFEN
@@ -64,7 +64,7 @@ C:\Users\{Usuario}\AppData\Roaming\FACTURACION\
 ### Si cliente quiere SIFEN
 
 1. Obtiene certificado `.p12` del DNIT
-2. Coloca en `C:\Users\{Usuario}\AppData\Roaming\FACTURACION\data\certificados\cert.p12`
+2. Coloca en `C:\Users\{Usuario}\AppData\Roaming\FacturaPY\data\certificados\cert.p12`
 3. Tú activas: `POST /admin/activar-sifen?empresa_id=1`
 4. Cliente puede usar facturación electrónica
 
@@ -111,7 +111,7 @@ ls -lh dist/
 ## Estructura del .exe
 
 PyInstaller genera:
-- `FACTURACION.exe` - ejecutable principal
+- `FacturaPY.exe` - ejecutable principal
 - Carpeta `_internal/` - librerías Python + dependencias
 - Total: ≈150-200MB
 
@@ -121,7 +121,7 @@ Para distribución usar NSIS, que comprime a ≈80MB.
 
 ## Notas de Seguridad
 
-- Base de datos SQLite se guarda en `%APPDATA%\FACTURACION\data\`
+- Base de datos SQLite se guarda en `%APPDATA%\FacturaPY\data\`
 - Certificados digitales NUNCA en carpeta de programa
 - Crear acceso restringido a certificados (permisos Windows)
 - Base de datos cliente NO debe estar en Dropbox/Cloud (corrupción)

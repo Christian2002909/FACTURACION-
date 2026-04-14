@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import auth, clientes, productos, facturas, pagos
-from app.routers import proveedores, compras, caja, reportes
+from app.routers import proveedores, compras, caja, reportes, configuracion
 from app.dependencies import get_current_user
 import app.models  # noqa: F401
 
@@ -15,9 +15,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Sistema de Facturación Paraguay",
+    title="FacturaPY — Sistema de Gestión Comercial",
     version="1.0.0",
-    description="Facturación electrónica y autoimpresa — Paraguay",
+    description="FacturaPY — Facturación electrónica y autoimpresa",
     lifespan=lifespan,
 )
 
@@ -47,8 +47,9 @@ app.include_router(proveedores.router, dependencies=[Depends(get_current_user)])
 app.include_router(compras.router, dependencies=[Depends(get_current_user)])
 app.include_router(caja.router, dependencies=[Depends(get_current_user)])
 app.include_router(reportes.router, dependencies=[Depends(get_current_user)])
+app.include_router(configuracion.router, prefix=PREFIX)
 
 
 @app.get("/")
 def root():
-    return {"status": "ok", "app": "Sistema de Facturación Paraguay"}
+    return {"status": "ok", "app": "FacturaPY"}

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script de compilación para Sistema de Facturación Paraguay
+FacturaPY — Build Script
 Uso: python build.py [--nsis]
 """
 import os
@@ -29,7 +29,7 @@ def run_command(cmd, description=""):
         return False
 
 def main():
-    print_header("SISTEMA DE FACTURACIÓN PARAGUAY — Build Script")
+    print_header("FacturaPY — Build Script")
 
     # Verificar directorio
     if not Path("run.py").exists():
@@ -51,19 +51,32 @@ def main():
     for f in Path(".").glob("*.spec"):
         f.unlink()
 
+    # Convertir logo a .ico para el ejecutable
+    icon_flag = ""
+    try:
+        from PIL import Image
+        img = Image.open("app/assets/LOGO-CV.jpg")
+        img.save("app/assets/favicon.ico", format="ICO", sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])
+        icon_flag = "--icon app/assets/favicon.ico "
+        print("✓ Ícono generado desde LOGO-CV.jpg")
+    except Exception as e:
+        print(f"⚠ No se pudo generar ícono: {e}")
+
     # Generar ejecutable
     print("\n🔨 Generando ejecutable con PyInstaller...")
     cmd = (
         "pyinstaller "
         "--onedir "
         "--windowed "
-        "--name FACTURACION "
+        "--name FacturaPY "
+        f"{icon_flag}"
+        "--add-data 'app/assets:app/assets' "
         "run.py"
     )
     if not run_command(cmd, "PyInstaller"):
         sys.exit(1)
 
-    print(f"✅ Ejecutable generado en: dist/FACTURACION/")
+    print(f"✅ Ejecutable generado en: dist/FacturaPY/")
 
     # Si se pide NSIS
     if "--nsis" in sys.argv:
@@ -77,17 +90,17 @@ def main():
             sys.exit(1)
 
         # Verificar ejecutable
-        if not Path("dist/FACTURACION").exists():
-            print("❌ Error: dist/FACTURACION no encontrado")
+        if not Path("dist/FacturaPY").exists():
+            print("❌ Error: dist/FacturaPY no encontrado")
             sys.exit(1)
 
         # Generar instalador
         if not run_command("makensis instalador.nsi", "NSIS"):
             sys.exit(1)
 
-        if Path("dist/FACTURACION-setup.exe").exists():
-            size = Path("dist/FACTURACION-setup.exe").stat().st_size / (1024*1024)
-            print(f"\n✅ Instalador generado: dist/FACTURACION-setup.exe ({size:.1f}MB)")
+        if Path("dist/FacturaPY-setup.exe").exists():
+            size = Path("dist/FacturaPY-setup.exe").stat().st_size / (1024*1024)
+            print(f"\n✅ Instalador generado: dist/FacturaPY-setup.exe ({size:.1f}MB)")
         else:
             print("❌ Error generando instalador NSIS")
             sys.exit(1)
@@ -96,7 +109,7 @@ def main():
     print("\nPróximos pasos:")
     print("  1. Probar en Linux: python run.py")
     print("  2. Generar instalador: python build.py --nsis")
-    print("  3. Distribuir: dist/FACTURACION-setup.exe a clientes Windows")
+    print("  3. Distribuir: dist/FacturaPY-setup.exe a clientes Windows")
     print()
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Vista previa de la GUI de escritorio para Sistema de Facturación Paraguay
+Vista previa de la GUI de escritorio para FacturaPY
 Ejecutar: python preview_gui.py
 """
 
@@ -11,7 +11,7 @@ from datetime import datetime
 class FacturacionGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sistema de Facturación Paraguay v1.0")
+        self.root.title("FacturaPY v1.0")
         self.root.geometry("1400x800")
         self.root.configure(bg="#f0f0f0")
 
@@ -312,7 +312,7 @@ class FacturacionGUI:
         messagebox.showinfo("Desarrollo", "Próximamente: Exportar reporte")
 
     def about(self):
-        messagebox.showinfo("Acerca de", "Sistema de Facturación Paraguay v1.0\n\nDiseñado para pequeñas empresas")
+        messagebox.showinfo("Acerca de", "FacturaPY v1.0\n\nSistema de Gestión Comercial para Paraguay")
 
 if __name__ == "__main__":
     root = tk.Tk()

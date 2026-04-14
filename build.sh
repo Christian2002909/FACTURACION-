@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script de compilación para Sistema de Facturación Paraguay
+# Script de compilación para FacturaPY
 # Uso: ./build.sh [--nsis]
 # Sin --nsis: genera ejecutable con PyInstaller
 # Con --nsis: genera instalador Windows NSIS
@@ -7,7 +7,7 @@
 set -e
 
 echo "╔════════════════════════════════════════════════════╗"
-echo "║   SISTEMA DE FACTURACIÓN PARAGUAY — Build Script   ║"
+echo "║            FacturaPY — Build Script                 ║"
 echo "╚════════════════════════════════════════════════════╝"
 echo ""
 
@@ -31,15 +31,15 @@ echo "🔨 Generando ejecutable con PyInstaller..."
 pyinstaller \
     --onedir \
     --windowed \
-    --name "FACTURACION" \
+    --name "FacturaPY" \
     --icon=app/gui/assets/icon.ico 2>/dev/null || \
 pyinstaller \
     --onedir \
     --windowed \
-    --name "FACTURACION" \
+    --name "FacturaPY" \
     run.py
 
-echo "✅ Ejecutable generado en: dist/FACTURACION/"
+echo "✅ Ejecutable generado en: dist/FacturaPY/"
 
 # Si se pide NSIS, generar instalador
 if [ "$1" = "--nsis" ]; then
@@ -53,17 +53,17 @@ if [ "$1" = "--nsis" ]; then
     fi
 
     # Verificar que el ejecutable existe
-    if [ ! -d "dist/FACTURACION" ]; then
-        echo "❌ Error: dist/FACTURACION no encontrado"
+    if [ ! -d "dist/FacturaPY" ]; then
+        echo "❌ Error: dist/FacturaPY no encontrado"
         exit 1
     fi
 
     # Generar instalador
     makensis instalador.nsi
 
-    if [ -f "dist/FACTURACION-setup.exe" ]; then
-        echo "✅ Instalador generado: dist/FACTURACION-setup.exe"
-        ls -lh dist/FACTURACION-setup.exe
+    if [ -f "dist/FacturaPY-setup.exe" ]; then
+        echo "✅ Instalador generado: dist/FacturaPY-setup.exe"
+        ls -lh dist/FacturaPY-setup.exe
     else
         echo "❌ Error generando instalador NSIS"
         exit 1
@@ -78,5 +78,5 @@ echo ""
 echo "Próximos pasos:"
 echo "  1. Probar en Linux: python run.py"
 echo "  2. Generar instalador: ./build.sh --nsis"
-echo "  3. Distribuir: dist/FACTURACION-setup.exe a clientes Windows"
+echo "  3. Distribuir: dist/FacturaPY-setup.exe a clientes Windows"
 echo ""

@@ -1,5 +1,5 @@
 """
-Configuración centralizada — Sistema de Facturación Paraguay
+Configuración centralizada — FacturaPY — Sistema de Gestión Comercial
 Variables de entorno desde .env
 """
 from pydantic_settings import BaseSettings
@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     SIFEN_CERT_PATH: str = "data/certificados/cert.p12"
     SIFEN_CERT_PASSWORD: str = ""
     SIFEN_CONTRIBUYENTE_TIPO: int = 1  # 1=Física, 2=Jurídica
+
+    # ── CONFIGURACIÓN ADMIN ───────────────────────────────────────────
+    ADMIN_CONFIG_PASSWORD: str = "admin_config_2026"  # default que debe cambiarse
 
     model_config = {"env_file": ".env"}
 

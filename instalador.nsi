@@ -1,13 +1,13 @@
-; NSIS Installer Script para FACTURACION- (Paraguay)
+; NSIS Installer Script para FacturaPY
 ; Instala la aplicación en Windows con acceso directo y desinstalador
 
 !include "MUI2.nsh"
 !include "x64.nsh"
 
 ; Configuración General
-Name "Sistema de Facturación Paraguay"
-OutFile "dist\FACTURACION-setup.exe"
-InstallDir "$PROGRAMFILES\FACTURACION"
+Name "FacturaPY — Sistema de Gestión Comercial"
+OutFile "dist\FacturaPY-setup.exe"
+InstallDir "$PROGRAMFILES\FacturaPY"
 ShowInstDetails show
 ShowUninstDetails show
 
@@ -28,32 +28,32 @@ Var StartMenuFolder
 !insertmacro MUI_LANGUAGE "Spanish"
 
 ; Sección de Instalación
-Section "Instalar FACTURACION"
+Section "Instalar FacturaPY"
   SetOutPath "$INSTDIR"
 
   ; Copiar archivos (después de PyInstaller)
-  File /r "dist\FACTURACION\*.*"
+  File /r "dist\FacturaPY\*.*"
 
   ; Crear carpetas de datos
-  CreateDirectory "$APPDATA\FACTURACION\data\facturas"
-  CreateDirectory "$APPDATA\FACTURACION\data\certificados"
-  CreateDirectory "$APPDATA\FACTURACION\data\backups"
+  CreateDirectory "$APPDATA\FacturaPY\data\facturas"
+  CreateDirectory "$APPDATA\FacturaPY\data\certificados"
+  CreateDirectory "$APPDATA\FacturaPY\data\backups"
 
   ; Crear acceso directo en Inicio
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\FACTURACION.lnk" "$INSTDIR\FACTURACION.exe" "" "$INSTDIR\FACTURACION.exe" 0
+    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\FacturaPY.lnk" "$INSTDIR\FacturaPY.exe" "" "$INSTDIR\FacturaPY.exe" 0
     CreateShortcut "$SMPROGRAMS\$StartMenuFolder\Desinstalar.lnk" "$INSTDIR\uninstall.exe"
   !insertmacro MUI_STARTMENU_WRITE_END
 
   ; Crear acceso directo en Escritorio
-  CreateShortcut "$DESKTOP\FACTURACION.lnk" "$INSTDIR\FACTURACION.exe" "" "$INSTDIR\FACTURACION.exe" 0
+  CreateShortcut "$DESKTOP\FacturaPY.lnk" "$INSTDIR\FacturaPY.exe" "" "$INSTDIR\FacturaPY.exe" 0
 
   ; Crear entrada en Agregar/Quitar Programas
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FACTURACION" "DisplayName" "Sistema de Facturación Paraguay"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FACTURACION" "UninstallString" "$INSTDIR\uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FACTURACION" "DisplayVersion" "1.0.0"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FACTURACION" "Publisher" "Tu Nombre"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FacturaPY" "DisplayName" "FacturaPY"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FacturaPY" "UninstallString" "$INSTDIR\uninstall.exe"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FacturaPY" "DisplayVersion" "1.0.0"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FacturaPY" "Publisher" "Tu Nombre"
 
   ; Crear desinstalador
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -66,13 +66,13 @@ Section "Uninstall"
   ; Eliminar accesos directos
   !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuFolder
   RMDir /r "$SMPROGRAMS\$StartMenuFolder"
-  Delete "$DESKTOP\FACTURACION.lnk"
+  Delete "$DESKTOP\FacturaPY.lnk"
 
   ; Eliminar archivos de programa (PERO NO datos del usuario)
   RMDir /r "$INSTDIR"
 
   ; Eliminar entrada del registro
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FACTURACION"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FacturaPY"
 
   DetailPrint "Desinstalación completada"
 SectionEnd
