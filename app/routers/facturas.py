@@ -3,7 +3,7 @@ Router de Facturas — Endpoints CRUD + emisión + PDF
 Usa factura_service.py para lógica centralizada
 """
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO
@@ -183,6 +183,7 @@ def anular(
 @router.get("/{factura_id}/preview")
 def previsualizar(
     factura_id: int,
+    paper_size: str = Query("a4"),
     db: Session = Depends(get_db),
     _=Depends(get_current_user)
 ):
@@ -191,7 +192,7 @@ def previsualizar(
     No asigna número, no cambia estado, no escribe en disco.
     """
     try:
-        pdf_bytes = previsualizar_factura(db, factura_id)
+        pdf_bytes = previsualizar_factura(db, factura_id, paper_size=paper_size)
     except FaculturaServiceError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -205,6 +206,7 @@ def previsualizar(
 @router.get("/{factura_id}/pdf")
 def descargar_pdf(
     factura_id: int,
+    paper_size: str = Query("a4"),
     db: Session = Depends(get_db),
     _=Depends(get_current_user)
 ):
@@ -216,17 +218,17 @@ def descargar_pdf(
     if f.estado == EstadoFactura.BORRADOR:
         raise HTTPException(status_code=400, detail="No se puede descargar PDF de un borrador. Primero emitir la factura.")
 
-    # Si existe archivo en disco, devolverlo
-    if f.pdf_path and os.path.exists(f.pdf_path):
+    # Si existe archivo en disco y se pide A4 (default), devolverlo
+    if paper_size.lower() == "a4" and f.pdf_path and os.path.exists(f.pdf_path):
         return FileResponse(
             f.pdf_path,
             media_type="application/pdf",
             filename=f"factura_{f.numero_completo}.pdf"
         )
 
-    # Si no existe, generar en memoria
+    # Generar en memoria con el tamaño solicitado
     empresa = db.query(Empresa).first()
-    pdf_bytes = generar_factura_pdf(f, empresa)
+    pdf_bytes = generar_factura_pdf(f, empresa, paper_size=paper_size)
     nombre = f"factura_{f.numero_completo or f.id}.pdf"
     return StreamingResponse(
         BytesIO(pdf_bytes),

@@ -12,7 +12,7 @@ from app.pdf.factura_pdf import generar_factura_pdf
 from app.services.factura_service import FaculturaServiceError
 
 
-def previsualizar_factura(db: Session, factura_id: int) -> bytes:
+def previsualizar_factura(db: Session, factura_id: int, paper_size: str = "a4") -> bytes:
     """
     Genera PDF en memoria con marca BORRADOR para vista previa.
     No toca la base de datos.
@@ -71,7 +71,7 @@ def previsualizar_factura(db: Session, factura_id: int) -> bytes:
         prox = str(empresa.numero_actual).zfill(7)
         factura.numero_completo = f"{est}-{pto}-{prox} [BORRADOR]"
 
-    pdf_bytes = generar_factura_pdf(factura, empresa)
+    pdf_bytes = generar_factura_pdf(factura, empresa, paper_size=paper_size)
 
     # Restaurar — no queremos que SQLAlchemy persista estos cambios
     factura.numero_completo = _numero_original

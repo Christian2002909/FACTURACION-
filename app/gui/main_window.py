@@ -81,7 +81,7 @@ def load_print_config():
         with open(PRINT_CONFIG_PATH, "r") as f:
             return json.load(f)
     except Exception:
-        return {"print_mode": "ask", "printer_type": "a4"}
+        return {"print_mode": "ask", "printer_type": "a4", "paper_size": "a4"}
 
 def save_print_config(config):
     os.makedirs(os.path.dirname(PRINT_CONFIG_PATH), exist_ok=True)
@@ -89,10 +89,10 @@ def save_print_config(config):
         json.dump(config, f)
 
 
-def print_factura(factura_id, printer_type="a4"):
+def print_factura(factura_id, printer_type="a4", paper_size="a4"):
     """Descarga el PDF de la factura y lo envía a imprimir."""
     try:
-        r = client.get(f"/facturas/{factura_id}/pdf")
+        r = client.get(f"/facturas/{factura_id}/pdf?paper_size={paper_size}")
         if r.status_code != 200:
             messagebox.showerror("Error", "No se pudo obtener el PDF de la factura")
             return False
@@ -808,9 +808,11 @@ class FacturasPanel(ctk.CTkFrame):
 
     def _pdf(self):
         if not self._sel_id: return messagebox.showinfo("Aviso","Seleccione una factura")
+        config = load_print_config()
+        ps = config.get("paper_size", "a4")
         def do():
             try:
-                r = client.get(f"/facturas/{self._sel_id}/pdf")
+                r = client.get(f"/facturas/{self._sel_id}/pdf?paper_size={ps}")
                 if r.status_code == 200:
                     path = f"data/facturas/factura_{self._sel_id}.pdf"
                     os.makedirs("data/facturas", exist_ok=True)
@@ -830,7 +832,7 @@ class FacturasPanel(ctk.CTkFrame):
         if not self._sel_id:
             return messagebox.showinfo("Aviso", "Seleccione una factura")
         config = load_print_config()
-        print_factura(self._sel_id, config["printer_type"])
+        print_factura(self._sel_id, config["printer_type"], config.get("paper_size", "a4"))
 
 
 # ── FacturaForm — Nueva factura con doble modo de carga ──────────────────────
@@ -1407,11 +1409,12 @@ class VistaPreviewFactura(ctk.CTkToplevel):
         fid = self.factura.get("id")
         if fid:
             config = load_print_config()
+            ps = config.get("paper_size", "a4")
             if config["print_mode"] == "auto":
-                print_factura(fid, config["printer_type"])
+                print_factura(fid, config["printer_type"], ps)
             elif config["print_mode"] == "ask":
                 if messagebox.askyesno("Imprimir", "¿Desea imprimir la factura?"):
-                    print_factura(fid, config["printer_type"])
+                    print_factura(fid, config["printer_type"], ps)
         self.on_emitir_done()
         self.destroy()
 
@@ -1917,6 +1920,17 @@ class ConfiguracionPanel(ctk.CTkFrame):
         }
         self._printer_type_reverse = {v: k for k, v in self._printer_type_map.items()}
 
+        self._paper_size_map = {
+            "Carta (21,59 x 27,94 cm)": "carta",
+            "Oficio (21,59 x 35,56 cm)": "oficio",
+            "Ejecutivo (18,42 x 26,67 cm)": "ejecutivo",
+            "A4 (21 x 29,7 cm)": "a4",
+            "A5 (14,8 x 21 cm)": "a5",
+            "Folio (21,59 x 33,02 cm)": "folio",
+            "B5 (17,6 x 25 cm)": "b5",
+        }
+        self._paper_size_reverse = {v: k for k, v in self._paper_size_map.items()}
+
         pcfg = load_print_config()
         self.prt_mode = field(form_prt, "Al emitir factura", 0,
                               choices=["Preguntar antes de imprimir", "Imprimir automáticamente", "No imprimir"],
@@ -1924,6 +1938,9 @@ class ConfiguracionPanel(ctk.CTkFrame):
         self.prt_type = field(form_prt, "Tipo de impresora", 1,
                               choices=["Normal (A4)", "Térmica POS (80mm)", "Térmica POS (58mm)"],
                               default=self._printer_type_reverse.get(pcfg.get("printer_type","a4"), "Normal (A4)"))
+        self.prt_paper = field(form_prt, "Tamaño de papel", 2,
+                               choices=list(self._paper_size_map.keys()),
+                               default=self._paper_size_reverse.get(pcfg.get("paper_size","a4"), "A4 (21 x 29,7 cm)"))
 
         prt_btns = ctk.CTkFrame(prt, fg_color="transparent")
         prt_btns.pack(fill="x", padx=16, pady=(4,12))
@@ -2040,6 +2057,7 @@ class ConfiguracionPanel(ctk.CTkFrame):
         config = {
             "print_mode": self._print_mode_map.get(self.prt_mode.get(), "ask"),
             "printer_type": self._printer_type_map.get(self.prt_type.get(), "a4"),
+            "paper_size": self._paper_size_map.get(self.prt_paper.get(), "a4"),
         }
         save_print_config(config)
         toast(self, "Configuración de impresión guardada")
