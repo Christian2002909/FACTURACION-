@@ -1880,7 +1880,8 @@ class ConfiguracionPanel(ctk.CTkFrame):
         self._logo_name_lbl = ctk.CTkLabel(logo_frame, text=f"  {_logo_name}",
                      text_color=C["muted"], font=("Segoe UI", 10))
         self._logo_name_lbl.pack(side="left", padx=8)
-        btn(logo_frame, "Cambiar logo", self._cambiar_logo, C["accent2"], "🖼️").pack(side="left", padx=8)
+        btn(logo_frame, "Cambiar logo", self._cambiar_logo, C["accent2"], "🖼️").pack(side="left", padx=4)
+        btn(logo_frame, "Eliminar logo", self._eliminar_logo, C["danger"], "🗑️").pack(side="left", padx=4)
 
         form_gen = ctk.CTkFrame(gen, fg_color="transparent")
         form_gen.pack(fill="x", padx=8, pady=4)
@@ -2044,6 +2045,21 @@ class ConfiguracionPanel(ctk.CTkFrame):
             except Exception as e:
                 self.after(0, lambda: messagebox.showerror("Error", str(e)))
         threading.Thread(target=do, daemon=True).start()
+
+    def _eliminar_logo(self):
+        """Elimina el logo actual de la empresa."""
+        import shutil
+        if not messagebox.askyesno("Eliminar logo", "¿Seguro que desea eliminar el logo actual?"):
+            return
+        try:
+            _logo_asset = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "LOGO-CV.jpg")
+            if os.path.exists(_logo_asset):
+                os.remove(_logo_asset)
+            self._logo_preview_lbl.configure(image="", text="[Sin logo]")
+            self._logo_name_lbl.configure(text="  No cargado")
+            toast(self, "Logo eliminado — reinicia el sistema para aplicar el cambio")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo eliminar el logo:\n{e}")
 
     def _cambiar_logo(self):
         """Abre explorador para seleccionar un nuevo logo y lo copia a app/assets/."""
