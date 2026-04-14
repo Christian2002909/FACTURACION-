@@ -1019,16 +1019,8 @@ class FacturaForm(ctk.CTkToplevel):
             self._cli_toggle_btn.configure(text="🔍 Desde BD", fg_color=C["accent"])
 
     def _format_ruc(self, *args):
-        val = self.cli_ruc_var.get().replace(".", "").replace("-", "")
-        if not val:
-            return
-        digits = "".join(c for c in val if c.isdigit())
-        if len(digits) > 0:
-            formatted = f"{int(digits):,}".replace(",", ".")
-            self.cli_ruc_var.trace_remove("write", self.cli_ruc_var.trace_info()[0][1])
-            self.cli_ruc_var.set(formatted)
-            self.cli_ruc_var.trace_add("write", self._format_ruc)
-            self._cli_ruc_entry.icursor("end")
+        # RUC paraguayo: solo numeros y guion — sin formato de puntos
+        pass
 
     def _get_cliente_ocasional_id(self):
         """Get client ID for occasional client: CONSUMIDOR FINAL or first available."""
