@@ -2,13 +2,8 @@ from datetime import datetime
 from sqlalchemy import Integer, String, Boolean, DateTime, Enum, Numeric, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
-import enum
+from app.models.enums import TasaIVA  # noqa: F401
 
-
-class TasaIVA(str, enum.Enum):
-    EXENTO = "0"
-    CINCO = "5"
-    DIEZ = "10"
 
 
 class Producto(Base):

@@ -16,6 +16,7 @@ from app.schemas.factura import FacturaCreate, FacturaUpdate, FacturaResponse
 from app.core.iva_calculator import calcular_iva_linea, calcular_totales
 from app.pdf.factura_pdf import generar_factura_pdf
 from app.services.factura_service import emitir_factura, anular_factura, FaculturaServiceError
+from app.services.preview_service import previsualizar_factura
 
 router = APIRouter(prefix="/facturas", tags=["Facturas"])
 
@@ -177,6 +178,28 @@ def anular(
         return anular_factura(db, factura_id, motivo)
     except FaculturaServiceError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{factura_id}/preview")
+def previsualizar(
+    factura_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user)
+):
+    """
+    Vista previa del PDF de un borrador antes de emitir.
+    No asigna número, no cambia estado, no escribe en disco.
+    """
+    try:
+        pdf_bytes = previsualizar_factura(db, factura_id)
+    except FaculturaServiceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=preview_borrador_{factura_id}.pdf"}
+    )
 
 
 @router.get("/{factura_id}/pdf")

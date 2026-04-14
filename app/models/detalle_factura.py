@@ -1,7 +1,7 @@
 from sqlalchemy import Integer, String, Numeric, ForeignKey, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
-from app.models.producto import TasaIVA
+from app.models.enums import TasaIVA  # noqa: F401 — re-exportado para compatibilidad
 
 
 class DetalleFactura(Base):

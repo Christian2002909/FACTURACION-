@@ -9,6 +9,7 @@ from app.models.factura import Factura, EstadoFactura, EstadoSIFEN
 from app.models.empresa import Empresa
 from app.models.detalle_factura import DetalleFactura, TasaIVA
 from app.pdf.factura_pdf import generar_factura_pdf
+from app.config import settings
 
 
 class FaculturaServiceError(Exception):
@@ -91,7 +92,7 @@ def emitir_factura(db: Session, factura_id: int) -> Factura:
     factura.estado = EstadoFactura.EMITIDA
 
     # Generar PDF en disco
-    pdf_dir = "data/facturas"
+    pdf_dir = settings.PDF_OUTPUT_DIR
     os.makedirs(pdf_dir, exist_ok=True)
     pdf_bytes = generar_factura_pdf(factura, empresa)
     pdf_path = os.path.join(pdf_dir, f"{factura.numero_completo}.pdf")
@@ -102,10 +103,15 @@ def emitir_factura(db: Session, factura_id: int) -> Factura:
     db.commit()
     db.refresh(factura)
 
-    # Disparar SIFEN si está habilitado (TODO: implementar en Fase 3)
-    # if settings.SIFEN_ENABLED:
-    #     from app.sifen.events import on_factura_emitida
-    #     on_factura_emitida(factura.id)
+    # Disparar SIFEN si está habilitado (Fase 3)
+    if getattr(settings, 'SIFEN_ENABLED', False):
+        try:
+            from app.sifen.events import on_factura_emitida
+            on_factura_emitida(factura.id)
+        except Exception as e:
+            # SIFEN falla en silencio: la factura autoimpresa ya quedó emitida
+            import logging
+            logging.getLogger(__name__).warning(f"SIFEN error en factura {factura.id}: {e}")
 
     return factura
 

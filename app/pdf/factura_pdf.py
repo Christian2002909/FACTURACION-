@@ -117,7 +117,11 @@ def generar_factura_pdf(factura, empresa) -> bytes:
     c.drawString(20 * mm, y, f"Dirección: {cliente.direccion or '' if cliente else ''}")
     c.drawString(120 * mm, y, f"Fecha: {factura.fecha_emision}")
     y -= 5 * mm
-    c.drawString(20 * mm, y, f"Condición de Venta: {factura.condicion_venta}")
+    # Parsear condición de venta: evitar imprimir el enum raw
+    _cond_raw = str(getattr(factura.condicion_venta, 'value', factura.condicion_venta))
+    _cond_texto = "Al Contado" if _cond_raw == "CONTADO" else "A Crédito"
+    c.drawString(20 * mm, y, f"Condición de Venta: {_cond_texto}")
+    c.drawString(120 * mm, y, f"Moneda: {factura.moneda or 'PYG'}")
 
     # ── TABLA DE DETALLES ──────────────────────────────────────────────────
     y -= 10 * mm
@@ -140,7 +144,7 @@ def generar_factura_pdf(factura, empresa) -> bytes:
 
         filas.append([
             str(int(d.cantidad)) if d.cantidad else "1",
-            (d.descripcion or "")[:45],
+            (d.descripcion or "")[:55],  # tabla ancha permite más caracteres
             f"{int(d.precio_unitario):,}".replace(",", ".") if d.precio_unitario else "0",
             f"{iva_item:,}".replace(",", "."),
             exenta, cinco, diez
