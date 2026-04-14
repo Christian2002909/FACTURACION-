@@ -182,6 +182,23 @@ def gs(val):
         return "Gs. 0"
 
 
+def format_gs_input(var, widget=None):
+    """Formatea automáticamente un campo de entrada de guaraníes con puntos de miles."""
+    def _format(*args):
+        val = var.get().replace(".", "").replace(",", "")
+        if val.isdigit() and len(val) > 0:
+            formatted = f"{int(val):,}".replace(",", ".")
+            var.set(formatted)
+            if widget:
+                widget.icursor("end")
+    return _format
+
+
+def unformat_gs(s):
+    """Quita puntos de miles de un string formateado: '1.000.000' -> '1000000'."""
+    return s.replace(".", "").replace(",", ".")
+
+
 # ── Login ─────────────────────────────────────────────────────────────────────
 class LoginScreen(ctk.CTkFrame):
     def __init__(self, master, on_success):
@@ -628,6 +645,10 @@ class ProductoForm(ctk.CTkToplevel):
         self.codigo = field(form, "Código *", 0, default=v.get("codigo",""))
         self.desc   = field(form, "Descripción *", 1, wide=True, default=v.get("descripcion",""))
         self.precio = field(form, "Precio *", 2, default=str(int(float(v.get("precio_unitario",0)))) if v else "")
+        self._precio_formatter = format_gs_input(self.precio)
+        self.precio.trace_add("write", self._precio_formatter)
+        if self.precio.get():
+            self._precio_formatter()
         self.iva    = field(form, "IVA %", 3, choices=["10","5","0"],
                             default=str(v.get("tasa_iva","10")))
         self.unidad = field(form, "Unidad", 4, choices=["UNIDAD","KG","LITRO","CAJA","METRO"],
@@ -776,6 +797,7 @@ class FacturaForm(ctk.CTkToplevel):
         self._clientes = []
         self._productos = []
         self._detalles = []
+        self._modo_ocasional = False
         if edit_data and edit_data.get("detalles"):
             self._detalles = list(edit_data["detalles"])
         self._build()
@@ -792,15 +814,50 @@ class FacturaForm(ctk.CTkToplevel):
         top.grid_columnconfigure(1, weight=1)
         top.grid_columnconfigure(3, weight=1)
 
-        ctk.CTkLabel(top, text="Cliente *", text_color=C["muted"],
-                     font=("Segoe UI",11)).grid(row=0, column=0, padx=12, pady=8, sticky="w")
+        # ── Cliente: toggle BD / Ocasional ──
+        cli_row = ctk.CTkFrame(top, fg_color="transparent")
+        cli_row.grid(row=0, column=0, columnspan=2, sticky="ew", padx=12, pady=8)
+
+        ctk.CTkLabel(cli_row, text="Cliente *", text_color=C["muted"],
+                     font=("Segoe UI",11)).pack(side="left", padx=(0,8))
+
+        self._cli_toggle_btn = ctk.CTkButton(
+            cli_row, text="🔍 Desde BD", width=120,
+            fg_color=C["accent"], hover_color=C["accent2"],
+            text_color=C["text_inv"], font=("Segoe UI", 10, "bold"),
+            command=self._toggle_cliente_modo)
+        self._cli_toggle_btn.pack(side="left", padx=(0,8))
+
+        # Frame BD mode
+        self._cli_bd_frame = ctk.CTkFrame(cli_row, fg_color="transparent")
+        self._cli_bd_frame.pack(side="left", fill="x", expand=True)
         self.cli_var = ctk.StringVar()
-        self.cli_menu = ctk.CTkOptionMenu(top, variable=self.cli_var,
+        self.cli_menu = ctk.CTkOptionMenu(self._cli_bd_frame, variable=self.cli_var,
                                            values=["Cargando..."], width=280,
                                            fg_color=C["input_bg"], button_color=C["accent"],
                                            text_color=C["text"],
                                            font=("Segoe UI",11))
-        self.cli_menu.grid(row=0, column=1, padx=4, pady=8, sticky="ew")
+        self.cli_menu.pack(side="left", fill="x", expand=True)
+
+        # Frame Ocasional mode (hidden initially)
+        self._cli_ocas_frame = ctk.CTkFrame(cli_row, fg_color="transparent")
+        ctk.CTkLabel(self._cli_ocas_frame, text="RUC/CI:", text_color=C["muted"],
+                     font=("Segoe UI",10)).pack(side="left", padx=(0,2))
+        self.cli_ruc_var = ctk.StringVar()
+        self._cli_ruc_entry = ctk.CTkEntry(self._cli_ocas_frame, textvariable=self.cli_ruc_var,
+                                            width=120, fg_color=C["input_bg"],
+                                            text_color=C["text"], font=("Segoe UI",11),
+                                            placeholder_text="Ej: 3.456.789-0")
+        self._cli_ruc_entry.pack(side="left", padx=2)
+        self.cli_ruc_var.trace_add("write", self._format_ruc)
+
+        ctk.CTkLabel(self._cli_ocas_frame, text="Nombre:", text_color=C["muted"],
+                     font=("Segoe UI",10)).pack(side="left", padx=(6,2))
+        self.cli_nombre_var = ctk.StringVar()
+        ctk.CTkEntry(self._cli_ocas_frame, textvariable=self.cli_nombre_var,
+                     width=160, fg_color=C["input_bg"],
+                     text_color=C["text"], font=("Segoe UI",11),
+                     placeholder_text="Razón Social").pack(side="left", padx=2)
 
         self.cond  = field(top, "Condición", 0, col=1, choices=["CONTADO","CREDITO"])
         self.fecha = field(top, "Fecha", 1, col=0, default=str(date.today()))
@@ -860,9 +917,12 @@ class FacturaForm(ctk.CTkToplevel):
 
         ctk.CTkLabel(db_row, text="Precio", text_color=C["muted"],
                      font=("Segoe UI",11)).pack(side="left", padx=4)
-        self.precio_db = ctk.CTkEntry(db_row, width=110, fg_color=C["input_bg"],
+        self._precio_db_var = ctk.StringVar()
+        self.precio_db = ctk.CTkEntry(db_row, textvariable=self._precio_db_var,
+                                       width=110, fg_color=C["input_bg"],
                                        text_color=C["text"], font=("Segoe UI",11))
         self.precio_db.pack(side="left", padx=4)
+        self._precio_db_var.trace_add("write", format_gs_input(self._precio_db_var, self.precio_db))
 
         btn(db_row, "Agregar", self._agregar_db, C["success"], "➕").pack(side="left", padx=8)
 
@@ -880,9 +940,12 @@ class FacturaForm(ctk.CTkToplevel):
 
         ctk.CTkLabel(man_row, text="Precio", text_color=C["muted"],
                      font=("Segoe UI",11)).pack(side="left", padx=4)
-        self.precio_manual = ctk.CTkEntry(man_row, width=100, fg_color=C["input_bg"],
+        self._precio_manual_var = ctk.StringVar()
+        self.precio_manual = ctk.CTkEntry(man_row, textvariable=self._precio_manual_var,
+                                           width=100, fg_color=C["input_bg"],
                                            text_color=C["text"], font=("Segoe UI",11))
         self.precio_manual.pack(side="left", padx=4)
+        self._precio_manual_var.trace_add("write", format_gs_input(self._precio_manual_var, self.precio_manual))
 
         ctk.CTkLabel(man_row, text="Cant.", text_color=C["muted"],
                      font=("Segoe UI",11)).pack(side="left", padx=4)
@@ -944,6 +1007,38 @@ class FacturaForm(ctk.CTkToplevel):
             self._tab_db_btn.configure(fg_color=C["panel"], text_color=C["text"],
                                         font=("Segoe UI", 11))
 
+    def _toggle_cliente_modo(self):
+        self._modo_ocasional = not self._modo_ocasional
+        if self._modo_ocasional:
+            self._cli_bd_frame.pack_forget()
+            self._cli_ocas_frame.pack(side="left", fill="x", expand=True)
+            self._cli_toggle_btn.configure(text="✏️ Ocasional", fg_color=C["warning"])
+        else:
+            self._cli_ocas_frame.pack_forget()
+            self._cli_bd_frame.pack(side="left", fill="x", expand=True)
+            self._cli_toggle_btn.configure(text="🔍 Desde BD", fg_color=C["accent"])
+
+    def _format_ruc(self, *args):
+        val = self.cli_ruc_var.get().replace(".", "").replace("-", "")
+        if not val:
+            return
+        digits = "".join(c for c in val if c.isdigit())
+        if len(digits) > 0:
+            formatted = f"{int(digits):,}".replace(",", ".")
+            self.cli_ruc_var.trace_remove("write", self.cli_ruc_var.trace_info()[0][1])
+            self.cli_ruc_var.set(formatted)
+            self.cli_ruc_var.trace_add("write", self._format_ruc)
+            self._cli_ruc_entry.icursor("end")
+
+    def _get_cliente_ocasional_id(self):
+        """Get client ID for occasional client: CONSUMIDOR FINAL or first available."""
+        for c in self._clientes:
+            if "CONSUMIDOR FINAL" in (c.get("razon_social", "") or "").upper():
+                return c["id"]
+        if self._clientes:
+            return self._clientes[0]["id"]
+        return None
+
     def _prefill_edit(self):
         d = self.edit_data
         if d.get("fecha_emision"):
@@ -973,8 +1068,7 @@ class FacturaForm(ctk.CTkToplevel):
             if prod_opts:
                 self.after(0, lambda: self.prod_var.set(prod_opts[0]))
                 p0 = self._productos[0]
-                self.after(0, lambda: (self.precio_db.delete(0,"end"),
-                                       self.precio_db.insert(0, str(int(float(p0["precio_unitario"]))))))
+                self.after(0, lambda: self._precio_db_var.set(str(int(float(p0["precio_unitario"])))))
         except Exception as e:
             self.after(0, lambda: messagebox.showerror("Error", str(e)))
 
@@ -983,8 +1077,7 @@ class FacturaForm(ctk.CTkToplevel):
             pid = int(choice.split(" - ")[0])
             prod = next((p for p in self._productos if p["id"] == pid), None)
             if prod:
-                self.precio_db.delete(0, "end")
-                self.precio_db.insert(0, str(int(float(prod["precio_unitario"]))))
+                self._precio_db_var.set(str(int(float(prod["precio_unitario"]))))
         except Exception:
             pass
 
@@ -1030,7 +1123,7 @@ class FacturaForm(ctk.CTkToplevel):
         })
         self._refresh_items()
         self.desc_manual.delete(0, "end")
-        self.precio_manual.delete(0, "end")
+        self._precio_manual_var.set("")
 
     def _refresh_items(self):
         for i in self.items_tree.get_children():
@@ -1059,15 +1152,32 @@ class FacturaForm(ctk.CTkToplevel):
         """Save as draft then open preview."""
         if not self._detalles:
             return messagebox.showerror("Error","Agregue al menos un ítem")
-        cs = self.cli_var.get()
-        if not cs or cs in ("Cargando...","Sin clientes"):
-            return messagebox.showerror("Error","Seleccione cliente")
+
+        if self._modo_ocasional:
+            ruc = self.cli_ruc_var.get().strip()
+            nombre = self.cli_nombre_var.get().strip()
+            if not ruc or not nombre:
+                return messagebox.showerror("Error","Ingrese RUC/CI y Nombre del cliente ocasional")
+            cid = self._get_cliente_ocasional_id()
+            if cid is None:
+                return messagebox.showerror("Error","No hay clientes disponibles en la base de datos")
+            obs_base = self.obs.get() or ""
+            obs_ocas = f"[Cliente Ocasional] RUC: {ruc} | Nombre: {nombre}"
+            observacion = f"{obs_ocas} | {obs_base}" if obs_base else obs_ocas
+            cli_name = f"{nombre} (RUC: {ruc})"
+        else:
+            cs = self.cli_var.get()
+            if not cs or cs in ("Cargando...","Sin clientes"):
+                return messagebox.showerror("Error","Seleccione cliente")
+            cid = int(cs.split(" - ")[0])
+            observacion = self.obs.get() or None
+            cli_name = cs.split(" - ", 1)[1] if " - " in cs else "—"
 
         payload = {
             "fecha_emision": self.fecha.get(),
-            "cliente_id": int(cs.split(" - ")[0]),
+            "cliente_id": cid,
             "condicion_venta": self.cond.get(),
-            "observacion": self.obs.get() or None,
+            "observacion": observacion,
             "detalles": self._detalles,
         }
         def do():
@@ -1078,7 +1188,6 @@ class FacturaForm(ctk.CTkToplevel):
                     r = client.post("/facturas", json=payload)
                 if r.status_code in (200, 201):
                     factura_data = r.json()
-                    cli_name = cs.split(" - ", 1)[1] if " - " in cs else "—"
                     self.after(0, lambda: self._open_preview(factura_data, cli_name))
                 else:
                     msg = r.json().get("detail", r.text)
