@@ -353,11 +353,12 @@ class Sidebar(ctk.CTkFrame):
         logo_frame.pack_propagate(False)
         logo_img = _load_logo(120, 40)
         if logo_img:
-            ctk.CTkLabel(logo_frame, image=logo_img, text="").pack(expand=True)
+            self._sidebar_logo_lbl = ctk.CTkLabel(logo_frame, image=logo_img, text="")
         else:
-            ctk.CTkLabel(logo_frame, text="CV TechStore",
+            self._sidebar_logo_lbl = ctk.CTkLabel(logo_frame, text="FacturaPY",
                          font=("Segoe UI", 13, "bold"),
-                         text_color=C["text_inv"]).pack(expand=True)
+                         text_color=C["text_inv"])
+        self._sidebar_logo_lbl.pack(expand=True)
 
         ctk.CTkFrame(self, fg_color="#2A3E66", height=1).pack(fill="x")
         ctk.CTkLabel(self, text="  MENÚ PRINCIPAL", text_color="#8899B3",
@@ -2048,16 +2049,23 @@ class ConfiguracionPanel(ctk.CTkFrame):
 
     def _eliminar_logo(self):
         """Elimina el logo actual de la empresa."""
-        import shutil
         if not messagebox.askyesno("Eliminar logo", "¿Seguro que desea eliminar el logo actual?"):
             return
         try:
             _logo_asset = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "LOGO-CV.jpg")
             if os.path.exists(_logo_asset):
                 os.remove(_logo_asset)
+            # Actualizar preview en configuración
             self._logo_preview_lbl.configure(image="", text="[Sin logo]")
             self._logo_name_lbl.configure(text="  No cargado")
-            toast(self, "Logo eliminado — reinicia el sistema para aplicar el cambio")
+            # Actualizar sidebar y header en tiempo real
+            app = self.winfo_toplevel()
+            if hasattr(app, '_sidebar') and hasattr(app._sidebar, '_sidebar_logo_lbl'):
+                app._sidebar._sidebar_logo_lbl.configure(image="", text="FacturaPY")
+            if hasattr(app, '_header_logo_lbl'):
+                app._header_logo_lbl.configure(image="", text="")
+                app._header_logo_lbl.pack_forget()
+            toast(self, "Logo eliminado correctamente")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo eliminar el logo:\n{e}")
 
@@ -2080,13 +2088,23 @@ class ConfiguracionPanel(ctk.CTkFrame):
             # Convertir a JPG si es necesario
             img = PILImage.open(ruta).convert("RGB")
             img.save(dest, "JPEG", quality=95)
-            # Actualizar preview
+            # Actualizar preview en configuración
             new_img = _load_logo(120, 40)
             if new_img:
                 self._logo_preview_lbl.configure(image=new_img, text="")
             nombre = os.path.basename(ruta)
             self._logo_name_lbl.configure(text=f"  {nombre}")
-            toast(self, "Logo actualizado — reinicia el sistema para ver el cambio en el encabezado")
+            # Actualizar sidebar y header en tiempo real
+            app = self.winfo_toplevel()
+            if new_img:
+                if hasattr(app, '_sidebar') and hasattr(app._sidebar, '_sidebar_logo_lbl'):
+                    sidebar_img = _load_logo(120, 40)
+                    app._sidebar._sidebar_logo_lbl.configure(image=sidebar_img, text="")
+                if hasattr(app, '_header_logo_lbl'):
+                    header_img = _load_logo(120, 40)
+                    app._header_logo_lbl.configure(image=header_img, text="")
+                    app._header_logo_lbl.pack(side="left", before=app._header_logo_lbl.master.winfo_children()[0])
+            toast(self, "Logo actualizado correctamente")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo cargar el logo:\n{e}")
 
@@ -2206,8 +2224,10 @@ class App(ctk.CTk):
         h_left = ctk.CTkFrame(header, fg_color="transparent")
         h_left.pack(side="left", padx=16)
         logo_img = _load_logo(120, 40)
+        self._header_logo_lbl = ctk.CTkLabel(h_left, image=logo_img if logo_img else None,
+                                              text="" if logo_img else "")
         if logo_img:
-            ctk.CTkLabel(h_left, image=logo_img, text="").pack(side="left")
+            self._header_logo_lbl.pack(side="left")
         ctk.CTkLabel(h_left, text="  FacturaPY", font=("Segoe UI", 14, "bold"),
                      text_color=C["text_inv"]).pack(side="left")
 
