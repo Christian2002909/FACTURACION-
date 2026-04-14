@@ -1,7 +1,11 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 import bcrypt
 from app.config import settings
+
+logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("audit")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -30,4 +34,9 @@ def decode_token(token: str) -> dict | None:
 
 
 def authenticate(username: str, password: str) -> bool:
-    return username == settings.APP_USERNAME and verify_password(password, settings.APP_PASSWORD_HASH)
+    success = username == settings.APP_USERNAME and verify_password(password, settings.APP_PASSWORD_HASH)
+    if success:
+        audit_logger.info("LOGIN_OK user=%s", username)
+    else:
+        logger.warning("LOGIN_FAILED user=%s", username)
+    return success

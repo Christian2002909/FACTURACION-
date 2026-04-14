@@ -3,6 +3,7 @@ Servicio centralizado de emisión, cálculo y anulación de facturas.
 Cumple Resolución SET N° 60/2015 — Paraguay
 """
 import os
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
 from app.models.factura import Factura, EstadoFactura, EstadoSIFEN
@@ -11,6 +12,9 @@ from app.models.detalle_factura import DetalleFactura, TasaIVA
 from app.pdf.factura_pdf import generar_factura_pdf
 from app.core.numeracion import obtener_siguiente_numero, formatear_numero_completo
 from app.config import settings
+
+logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("audit")
 
 
 class FaculturaServiceError(Exception):
@@ -63,11 +67,15 @@ def emitir_factura(db: Session, factura_id: int) -> Factura:
     Raises:
         FaculturaServiceError: Si hay error en emisión
     """
+    logger.info("Iniciando emisión de factura %d", factura_id)
+
     factura = db.query(Factura).filter(Factura.id == factura_id).first()
     if not factura:
+        logger.warning("Factura %d no encontrada", factura_id)
         raise FaculturaServiceError(f"Factura {factura_id} no encontrada")
 
     if factura.estado != EstadoFactura.BORRADOR:
+        logger.warning("Intento de emitir factura %d en estado %s", factura_id, factura.estado)
         raise FaculturaServiceError(
             f"Solo se pueden emitir facturas en estado BORRADOR. "
             f"Estado actual: {factura.estado}"
@@ -75,6 +83,7 @@ def emitir_factura(db: Session, factura_id: int) -> Factura:
 
     empresa = db.query(Empresa).first()
     if not empresa:
+        logger.error("No hay empresa configurada en el sistema")
         raise FaculturaServiceError("No hay empresa configurada en el sistema")
 
     # Calcular totales
@@ -103,6 +112,13 @@ def emitir_factura(db: Session, factura_id: int) -> Factura:
     db.commit()
     db.refresh(factura)
 
+    # Registro de auditoría
+    audit_logger.info(
+        "FACTURA_EMITIDA id=%d numero=%s total=%s cliente_id=%d",
+        factura.id, factura.numero_completo, factura.total, factura.cliente_id,
+    )
+    logger.info("Factura %d emitida: %s", factura.id, factura.numero_completo)
+
     # Disparar SIFEN si está habilitado (Fase 3)
     if getattr(settings, 'SIFEN_ENABLED', False):
         try:
@@ -110,8 +126,7 @@ def emitir_factura(db: Session, factura_id: int) -> Factura:
             on_factura_emitida(factura.id)
         except Exception as e:
             # SIFEN falla en silencio: la factura autoimpresa ya quedó emitida
-            import logging
-            logging.getLogger(__name__).warning(f"SIFEN error en factura {factura.id}: {e}")
+            logger.warning("SIFEN error en factura %d: %s", factura.id, e)
 
     return factura
 
@@ -124,14 +139,19 @@ def anular_factura(db: Session, factura_id: int, motivo: str = "") -> Factura:
     Raises:
         FaculturaServiceError: Si hay error en anulación
     """
+    logger.info("Iniciando anulación de factura %d", factura_id)
+
     factura = db.query(Factura).filter(Factura.id == factura_id).first()
     if not factura:
+        logger.warning("Factura %d no encontrada para anulación", factura_id)
         raise FaculturaServiceError("Factura no encontrada")
 
     if factura.estado != EstadoFactura.EMITIDA:
+        logger.warning("Intento de anular factura %d en estado %s", factura_id, factura.estado)
         raise FaculturaServiceError("Solo se pueden anular facturas emitidas")
 
     if factura.sifen_estado == EstadoSIFEN.APROBADO:
+        logger.warning("Intento de anular factura %d aprobada en SIFEN", factura_id)
         raise FaculturaServiceError(
             "No se puede anular una factura electrónica aprobada por SIFEN. "
             "Debe emitir una Nota de Crédito Electrónica."
@@ -150,4 +170,11 @@ def anular_factura(db: Session, factura_id: int, motivo: str = "") -> Factura:
 
     db.commit()
     db.refresh(factura)
+
+    audit_logger.info(
+        "FACTURA_ANULADA id=%d numero=%s motivo=%s",
+        factura.id, factura.numero_completo, motivo,
+    )
+    logger.info("Factura %d anulada", factura.id)
+
     return factura

@@ -1,25 +1,41 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.logging_config import setup_logging
+from app.core.rate_limit import setup_rate_limiting
 from app.database import engine, Base
 from app.routers import auth, clientes, productos, facturas, pagos
 from app.routers import proveedores, compras, caja, reportes, configuracion
 from app.dependencies import get_current_user
 import app.models  # noqa: F401
 
+# Inicializar logging antes de todo
+setup_logging()
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("FacturaPY iniciando — creando tablas en BD")
     Base.metadata.create_all(bind=engine)
+    logger.info("FacturaPY listo")
     yield
+    logger.info("FacturaPY cerrando")
 
 
 app = FastAPI(
     title="FacturaPY — Sistema de Gestión Comercial",
-    version="1.0.0",
-    description="FacturaPY — Facturación electrónica y autoimpresa",
+    version="1.1.0",
+    description=(
+        "FacturaPY — Sistema de facturación electrónica y autoimpresa para Paraguay. "
+        "Cumple Resolución SET N° 60/2015. Soporta SIFEN (e-kuatia)."
+    ),
     lifespan=lifespan,
 )
+
+# Rate limiting
+setup_rate_limiting(app)
 
 # CORS restrictivo — solo permitir orígenes de confianza
 ALLOWED_ORIGINS = [
@@ -50,6 +66,6 @@ app.include_router(reportes.router, dependencies=[Depends(get_current_user)])
 app.include_router(configuracion.router, prefix=PREFIX)
 
 
-@app.get("/")
+@app.get("/", summary="Health check", tags=["Sistema"])
 def root():
-    return {"status": "ok", "app": "FacturaPY"}
+    return {"status": "ok", "app": "FacturaPY", "version": "1.1.0"}
