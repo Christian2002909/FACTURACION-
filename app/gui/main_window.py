@@ -1026,7 +1026,7 @@ class FacturaForm(ctk.CTkToplevel):
             "descripcion": desc,
             "cantidad": cant,
             "precio_unitario": precio,
-            "tasa_iva": int(self.iva_manual.get()),
+            "tasa_iva": str(self.iva_manual.get()),
         })
         self._refresh_items()
         self.desc_manual.delete(0, "end")
