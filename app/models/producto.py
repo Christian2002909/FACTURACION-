@@ -14,6 +14,7 @@ class Producto(Base):
     descripcion: Mapped[str] = mapped_column(String(500), nullable=False)
     precio_unitario: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     tasa_iva: Mapped[TasaIVA] = mapped_column(Enum(TasaIVA), nullable=False, default=TasaIVA.DIEZ)
+    stock: Mapped[float] = mapped_column(Numeric(10, 3), default=0, nullable=False, server_default="0")
     unidad_medida: Mapped[str] = mapped_column(String(50), default="UNIDAD")
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

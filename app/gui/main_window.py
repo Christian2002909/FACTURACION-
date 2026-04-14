@@ -184,7 +184,6 @@ class LoginScreen(ctk.CTkFrame):
                                 fg_color=C["card"], border_color=C["border"],
                                 font=("Segoe UI", 13))
         self.pw.pack(pady=6)
-        self.pw.insert(0, "admin123")
 
         self.err = ctk.CTkLabel(card, text="", text_color=C["danger"],
                                  font=("Segoe UI", 11))
@@ -206,8 +205,11 @@ class LoginScreen(ctk.CTkFrame):
         threading.Thread(target=lambda: self._do_login(), daemon=True).start()
 
     def _do_login(self):
-        ok = client.login(self.user.get(), self.pw.get())
-        self.after(0, lambda: self._result(ok))
+        try:
+            ok = client.login(self.user.get(), self.pw.get())
+            self.after(0, lambda: self._result(ok))
+        except Exception:
+            self.after(0, lambda: messagebox.showerror("Error de conexión", "No se pudo conectar al servidor. Verifique que la aplicación esté corriendo."))
 
     def _result(self, ok):
         self.login_btn.configure(state="normal", text="Iniciar Sesión")

@@ -25,7 +25,7 @@ def ventas_periodo(
         Factura.estado == EstadoFactura.EMITIDA
     ).all()
 
-    total = sum(float(f.monto_total) for f in facturas)
+    total = sum(float(f.total) for f in facturas)
     total_iva = sum(float(f.total_iva) for f in facturas)
 
     return {
@@ -55,8 +55,8 @@ def clientes_deudores(db: Session = Depends(get_db)):
         if cliente:
             resultado.append({
                 "cliente_id": c.cuo_cliente,
-                "nombre": cliente.nombre,
-                "ruc": cliente.ruc,
+                "nombre": cliente.razon_social,
+                "ruc": cliente.ruc_ci,
                 "total_deuda": float(c.total_deuda),
                 "cuotas_pendientes": c.cuotas_pendientes
             })
@@ -118,8 +118,8 @@ def iva_mensual(anio: int = Query(...), mes: int = Query(...), db: Session = Dep
         Factura.estado == EstadoFactura.EMITIDA
     ).all()
 
-    iva5 = sum(float(f.iva5) for f in facturas if hasattr(f, "iva5") and f.iva5)
-    iva10 = sum(float(f.iva10) for f in facturas if hasattr(f, "iva10") and f.iva10)
+    iva5 = sum(float(f.iva_5) for f in facturas if f.iva_5)
+    iva10 = sum(float(f.iva_10) for f in facturas if f.iva_10)
 
     return {
         "anio": anio,

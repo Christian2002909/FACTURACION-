@@ -9,6 +9,7 @@ from app.models.factura import Factura, EstadoFactura, EstadoSIFEN
 from app.models.empresa import Empresa
 from app.models.detalle_factura import DetalleFactura, TasaIVA
 from app.pdf.factura_pdf import generar_factura_pdf
+from app.core.numeracion import obtener_siguiente_numero, formatear_numero_completo
 from app.config import settings
 
 
@@ -49,7 +50,7 @@ def calcular_totales(factura: Factura) -> Factura:
     factura.iva_5 = iva_5
     factura.iva_10 = iva_10
     factura.total_iva = iva_5 + iva_10
-    factura.total = subtotal_exenta + subtotal_gravada_5 + subtotal_gravada_10
+    factura.total = subtotal_exenta + subtotal_gravada_5 + subtotal_gravada_10 + factura.iva_5 + factura.iva_10
 
     return factura
 
@@ -79,14 +80,13 @@ def emitir_factura(db: Session, factura_id: int) -> Factura:
     # Calcular totales
     factura = calcular_totales(factura)
 
-    # Asignar número correlativo ATÓMICO
-    numero_str = str(empresa.numero_actual).zfill(7)
-    factura.timbrado = empresa.timbrado
-    factura.establecimiento = empresa.establecimiento
-    factura.punto_expedicion = empresa.punto_expedicion
+    # Asignar número correlativo ATÓMICO (con lock de fila via with_for_update)
+    timbrado, establecimiento, punto_expedicion, numero_str = obtener_siguiente_numero(db)
+    factura.timbrado = timbrado
+    factura.establecimiento = establecimiento
+    factura.punto_expedicion = punto_expedicion
     factura.numero = numero_str
-    factura.numero_completo = f"{empresa.establecimiento}-{empresa.punto_expedicion}-{numero_str}"
-    empresa.numero_actual += 1
+    factura.numero_completo = formatear_numero_completo(establecimiento, punto_expedicion, numero_str)
 
     # Cambiar estado
     factura.estado = EstadoFactura.EMITIDA
