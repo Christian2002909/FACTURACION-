@@ -1016,7 +1016,6 @@ class FacturaForm(ctk.CTkToplevel):
         threading.Thread(target=do, daemon=True).start()
 
     def _nuevo_cliente(self):
-        from app.gui.main_window import ClienteForm
         def on_guardado():
             ruc = self.cli_ruc_var.get().strip()
             if ruc:
