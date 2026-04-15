@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import platform
+import webbrowser
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -632,6 +633,7 @@ class ClienteForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar, "Guardar", self._save, C["accent"], "💾").pack(side="right", padx=4)
         btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
+        btn(bbar, "🔍 Buscar RUC", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
 
     def _on_ruc_change(self, *args):
         """Debounce la búsqueda de RUC cuando el usuario escribe."""
@@ -651,6 +653,17 @@ class ClienteForm(ctk.CTkToplevel):
                 self.after(0, lambda: self.razon.set(razon))
 
         threading.Thread(target=do, daemon=True).start()
+
+    def _abrir_busqueda_ruc(self):
+        """Abre ruc.com.py en el navegador para búsqueda manual."""
+        ruc = self.ruc.get().strip()
+        if ruc:
+            # Limpiar RUC para búsqueda (remover puntos, guiones, espacios)
+            ruc_clean = ruc.replace(".", "").replace("-", "").strip()
+            url = f"https://www.ruc.com.py/buscar/{ruc_clean}"
+        else:
+            url = "https://www.ruc.com.py/"
+        webbrowser.open(url)
 
     def _save(self):
         if not self.razon.get():
@@ -1643,6 +1656,7 @@ class ProveedorForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar,"Guardar",self._save,C["accent"],"💾").pack(side="right",padx=4)
         btn(bbar,"Cancelar",self.destroy,C["border"]).pack(side="right",padx=4)
+        btn(bbar, "🔍 Buscar RUC", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
 
     def _on_ruc_change(self, *args):
         """Debounce la búsqueda de RUC cuando el usuario escribe."""
@@ -1662,6 +1676,17 @@ class ProveedorForm(ctk.CTkToplevel):
                 self.after(0, lambda: self.nombre.set(razon))
 
         threading.Thread(target=do, daemon=True).start()
+
+    def _abrir_busqueda_ruc(self):
+        """Abre ruc.com.py en el navegador para búsqueda manual."""
+        ruc = self.ruc.get().strip()
+        if ruc:
+            # Limpiar RUC para búsqueda (remover puntos, guiones, espacios)
+            ruc_clean = ruc.replace(".", "").replace("-", "").strip()
+            url = f"https://www.ruc.com.py/buscar/{ruc_clean}"
+        else:
+            url = "https://www.ruc.com.py/"
+        webbrowser.open(url)
 
     def _save(self):
         if not self.ruc.get().strip() or not self.nombre.get().strip():
