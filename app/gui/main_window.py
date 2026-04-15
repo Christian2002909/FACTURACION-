@@ -621,10 +621,6 @@ class ClienteForm(ctk.CTkToplevel):
                            default=v.get("tipo_contribuyente","RUC"))
         self.ruc   = field(form, "RUC / CI", 1, default=v.get("ruc_ci",""))
         self.razon = field(form, "Razón Social *", 2, wide=True, default=v.get("razon_social",""))
-
-        # Agregar búsqueda automática de razón social por RUC
-        self._ruc_search_after = None
-        self.ruc.variable.trace_add("write", self._on_ruc_change)
         self.tel   = field(form, "Teléfono", 3, default=v.get("telefono",""))
         self.email = field(form, "Email", 4, default=v.get("email",""))
         self.dir   = field(form, "Dirección", 5, wide=True, default=v.get("direccion",""))
@@ -633,32 +629,12 @@ class ClienteForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar, "Guardar", self._save, C["accent"], "💾").pack(side="right", padx=4)
         btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
-        btn(bbar, "🔍 Buscar RUC", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
-
-    def _on_ruc_change(self, *args):
-        """Debounce la búsqueda de RUC cuando el usuario escribe."""
-        if self._ruc_search_after:
-            self.after_cancel(self._ruc_search_after)
-        self._ruc_search_after = self.after(1000, self._buscar_razon_social)
-
-    def _buscar_razon_social(self):
-        """Intenta obtener la razón social del RUC desde ruc.com.py."""
-        ruc = self.ruc.get().strip()
-        if not ruc or len(ruc) < 5:
-            return
-
-        def do():
-            razon = _lookup_ruc_externo(ruc)
-            if razon:
-                self.after(0, lambda: self.razon.set(razon))
-
-        threading.Thread(target=do, daemon=True).start()
+        btn(bbar, "🔍 Buscar en ruc.com.py", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
 
     def _abrir_busqueda_ruc(self):
         """Abre ruc.com.py en el navegador para búsqueda manual."""
         ruc = self.ruc.get().strip()
         if ruc:
-            # Limpiar RUC para búsqueda (remover puntos, guiones, espacios)
             ruc_clean = ruc.replace(".", "").replace("-", "").strip()
             url = f"https://www.ruc.com.py/buscar/{ruc_clean}"
         else:
@@ -1645,10 +1621,6 @@ class ProveedorForm(ctk.CTkToplevel):
         v = self.item or {}
         self.ruc    = field(form,"RUC *",        0, default=v.get("prov_ruc",""))
         self.nombre = field(form,"Nombre / Razón Social *", 1, wide=True, default=v.get("prov_nom",""))
-
-        # Agregar búsqueda automática de razón social por RUC
-        self._ruc_search_after = None
-        self.ruc.variable.trace_add("write", self._on_ruc_change)
         self.tel    = field(form,"Teléfono",   2, default=v.get("prov_tel",""))
         self.email  = field(form,"Email",      3, default=v.get("prov_email",""))
         self.dir    = field(form,"Dirección",  4, wide=True, default=v.get("prov_dir",""))
@@ -1656,26 +1628,7 @@ class ProveedorForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar,"Guardar",self._save,C["accent"],"💾").pack(side="right",padx=4)
         btn(bbar,"Cancelar",self.destroy,C["border"]).pack(side="right",padx=4)
-        btn(bbar, "🔍 Buscar RUC", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
-
-    def _on_ruc_change(self, *args):
-        """Debounce la búsqueda de RUC cuando el usuario escribe."""
-        if self._ruc_search_after:
-            self.after_cancel(self._ruc_search_after)
-        self._ruc_search_after = self.after(1000, self._buscar_razon_social)
-
-    def _buscar_razon_social(self):
-        """Intenta obtener la razón social del RUC desde ruc.com.py."""
-        ruc = self.ruc.get().strip()
-        if not ruc or len(ruc) < 5:
-            return
-
-        def do():
-            razon = _lookup_ruc_externo(ruc)
-            if razon:
-                self.after(0, lambda: self.nombre.set(razon))
-
-        threading.Thread(target=do, daemon=True).start()
+        btn(bbar, "🔍 Buscar en ruc.com.py", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
 
     def _abrir_busqueda_ruc(self):
         """Abre ruc.com.py en el navegador para búsqueda manual."""
