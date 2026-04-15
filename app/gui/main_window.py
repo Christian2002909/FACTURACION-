@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import platform
+import webbrowser
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -133,6 +134,39 @@ def _load_logo(width, height):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def _lookup_ruc_externo(ruc):
+    """
+    Busca la razón social de un RUC en ruc.com.py.
+    Retorna la razón social si la encuentra, None en caso contrario.
+    Esta es una búsqueda best-effort — no bloquea la UI.
+    """
+    try:
+        # Limpiar el RUC: remover puntos y guiones
+        ruc_clean = ruc.replace(".", "").replace("-", "").strip()
+        if not ruc_clean or len(ruc_clean) < 5:
+            return None
+
+        # Intentar búsqueda en ruc.com.py
+        # El sitio tiene una API o endpoint de búsqueda
+        url = f"https://www.ruc.com.py/api/ruc/{ruc_clean}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        r = requests.get(url, timeout=3, headers=headers)
+
+        if r.status_code == 200:
+            data = r.json()
+            # Buscar el campo de razón social (puede variar según API)
+            razon = data.get("razonSocial") or data.get("razon_social") or data.get("nombre") or data.get("name")
+            if razon:
+                return razon.strip()
+    except Exception:
+        # Si no funciona, simplemente retorna None — no queremos que se vea un error al usuario
+        pass
+
+    return None
+
+
 def make_table(parent, columns, col_widths=None):
     frame = ctk.CTkFrame(parent, fg_color=C["panel"], corner_radius=10,
                          border_width=1, border_color=C["border"])
@@ -587,6 +621,10 @@ class ClienteForm(ctk.CTkToplevel):
                            default=v.get("tipo_contribuyente","RUC"))
         self.ruc   = field(form, "RUC / CI", 1, default=v.get("ruc_ci",""))
         self.razon = field(form, "Razón Social *", 2, wide=True, default=v.get("razon_social",""))
+
+        # Agregar búsqueda automática de razón social por RUC
+        self._ruc_search_after = None
+        self.ruc.variable.trace_add("write", self._on_ruc_change)
         self.tel   = field(form, "Teléfono", 3, default=v.get("telefono",""))
         self.email = field(form, "Email", 4, default=v.get("email",""))
         self.dir   = field(form, "Dirección", 5, wide=True, default=v.get("direccion",""))
@@ -595,6 +633,37 @@ class ClienteForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar, "Guardar", self._save, C["accent"], "💾").pack(side="right", padx=4)
         btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
+        btn(bbar, "🔍 Buscar RUC", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
+
+    def _on_ruc_change(self, *args):
+        """Debounce la búsqueda de RUC cuando el usuario escribe."""
+        if self._ruc_search_after:
+            self.after_cancel(self._ruc_search_after)
+        self._ruc_search_after = self.after(1000, self._buscar_razon_social)
+
+    def _buscar_razon_social(self):
+        """Intenta obtener la razón social del RUC desde ruc.com.py."""
+        ruc = self.ruc.get().strip()
+        if not ruc or len(ruc) < 5:
+            return
+
+        def do():
+            razon = _lookup_ruc_externo(ruc)
+            if razon:
+                self.after(0, lambda: self.razon.set(razon))
+
+        threading.Thread(target=do, daemon=True).start()
+
+    def _abrir_busqueda_ruc(self):
+        """Abre ruc.com.py en el navegador para búsqueda manual."""
+        ruc = self.ruc.get().strip()
+        if ruc:
+            # Limpiar RUC para búsqueda (remover puntos, guiones, espacios)
+            ruc_clean = ruc.replace(".", "").replace("-", "").strip()
+            url = f"https://www.ruc.com.py/buscar/{ruc_clean}"
+        else:
+            url = "https://www.ruc.com.py/"
+        webbrowser.open(url)
 
     def _save(self):
         if not self.razon.get():
@@ -1576,6 +1645,10 @@ class ProveedorForm(ctk.CTkToplevel):
         v = self.item or {}
         self.ruc    = field(form,"RUC *",        0, default=v.get("prov_ruc",""))
         self.nombre = field(form,"Nombre / Razón Social *", 1, wide=True, default=v.get("prov_nom",""))
+
+        # Agregar búsqueda automática de razón social por RUC
+        self._ruc_search_after = None
+        self.ruc.variable.trace_add("write", self._on_ruc_change)
         self.tel    = field(form,"Teléfono",   2, default=v.get("prov_tel",""))
         self.email  = field(form,"Email",      3, default=v.get("prov_email",""))
         self.dir    = field(form,"Dirección",  4, wide=True, default=v.get("prov_dir",""))
@@ -1583,6 +1656,37 @@ class ProveedorForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar,"Guardar",self._save,C["accent"],"💾").pack(side="right",padx=4)
         btn(bbar,"Cancelar",self.destroy,C["border"]).pack(side="right",padx=4)
+        btn(bbar, "🔍 Buscar RUC", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
+
+    def _on_ruc_change(self, *args):
+        """Debounce la búsqueda de RUC cuando el usuario escribe."""
+        if self._ruc_search_after:
+            self.after_cancel(self._ruc_search_after)
+        self._ruc_search_after = self.after(1000, self._buscar_razon_social)
+
+    def _buscar_razon_social(self):
+        """Intenta obtener la razón social del RUC desde ruc.com.py."""
+        ruc = self.ruc.get().strip()
+        if not ruc or len(ruc) < 5:
+            return
+
+        def do():
+            razon = _lookup_ruc_externo(ruc)
+            if razon:
+                self.after(0, lambda: self.nombre.set(razon))
+
+        threading.Thread(target=do, daemon=True).start()
+
+    def _abrir_busqueda_ruc(self):
+        """Abre ruc.com.py en el navegador para búsqueda manual."""
+        ruc = self.ruc.get().strip()
+        if ruc:
+            # Limpiar RUC para búsqueda (remover puntos, guiones, espacios)
+            ruc_clean = ruc.replace(".", "").replace("-", "").strip()
+            url = f"https://www.ruc.com.py/buscar/{ruc_clean}"
+        else:
+            url = "https://www.ruc.com.py/"
+        webbrowser.open(url)
 
     def _save(self):
         if not self.ruc.get().strip() or not self.nombre.get().strip():
