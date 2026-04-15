@@ -850,6 +850,7 @@ class FacturaForm(ctk.CTkToplevel):
         self.minsize(860, 700)
         self.configure(fg_color=C["bg"])
         self.grab_set()
+        self.after(0, lambda: self.state("zoomed"))
         self._clientes = []
         self._detalles = []
         self._cliente_id = None          # int si está en BD, None si es ocasional
