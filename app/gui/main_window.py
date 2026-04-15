@@ -324,12 +324,12 @@ class LoginScreen(ctk.CTkFrame):
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 MENU = [
-    ("🏠", "Dashboard"),
+    ("🏠", "Inicio"),
     ("📄", "Facturas"),
     ("👥", "Clientes"),
     ("📦", "Productos"),
     ("🏭", "Proveedores"),
-    ("🛒", "Compras"),
+    ("📦", "Stock"),
     ("💰", "Caja"),
     ("📈", "Reportes"),
     ("⚙️", "Configuración"),
@@ -395,7 +395,7 @@ class DashboardPanel(ctk.CTkFrame):
     def _build(self):
         hdr = ctk.CTkFrame(self, fg_color="transparent")
         hdr.pack(fill="x", padx=24, pady=(20, 8))
-        ctk.CTkLabel(hdr, text="Dashboard",
+        ctk.CTkLabel(hdr, text="Inicio",
                      font=("Segoe UI", 22, "bold"), text_color=C["text"]).pack(side="left")
         ctk.CTkLabel(hdr, text=f"Hoy: {date.today().strftime('%d/%m/%Y')}",
                      font=("Segoe UI", 12), text_color=C["muted"]).pack(side="right")
@@ -834,20 +834,22 @@ class FacturasPanel(ctk.CTkFrame):
         print_factura(self._sel_id, config["printer_type"])
 
 
-# ── FacturaForm — Nueva factura con doble modo de carga ──────────────────────
+# ── FacturaForm — Nueva factura con carga unificada ──────────────────────────
 class FacturaForm(ctk.CTkToplevel):
     def __init__(self, parent, on_save, edit_data=None):
         super().__init__(parent)
         self.on_save = on_save
         self.edit_data = edit_data
         self.title("Nueva Factura")
-        self.geometry("800x680")
+        self.geometry("860x700")
         self.configure(fg_color=C["bg"])
         self.grab_set()
         self._clientes = []
-        self._productos = []
         self._detalles = []
-        self._modo_ocasional = False
+        self._cliente_id = None          # int si está en BD, None si es ocasional
+        self._prod_id = None             # int si código encontrado en BD, None si manual
+        self._cli_search_after = None    # debounce timer
+        self._cod_search_after = None    # debounce timer
         if edit_data and edit_data.get("detalles"):
             self._detalles = list(edit_data["detalles"])
         self._build()
@@ -855,317 +857,238 @@ class FacturaForm(ctk.CTkToplevel):
 
     def _build(self):
         ctk.CTkLabel(self, text="➕  Nueva Factura",
-                     font=("Segoe UI", 16, "bold"), text_color=C["text"]).pack(pady=(12,4))
+                     font=("Segoe UI", 16, "bold"), text_color=C["text"]).pack(pady=(12, 4))
 
-        # ── Header: Cliente y condición ──
+        # ── Header: Cliente ──
         top = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=12,
                            border_width=1, border_color=C["border"])
         top.pack(fill="x", padx=16, pady=4)
         top.grid_columnconfigure(1, weight=1)
         top.grid_columnconfigure(3, weight=1)
 
-        # ── Cliente: toggle BD / Ocasional ──
         cli_row = ctk.CTkFrame(top, fg_color="transparent")
-        cli_row.grid(row=0, column=0, columnspan=2, sticky="ew", padx=12, pady=8)
+        cli_row.grid(row=0, column=0, columnspan=4, sticky="ew", padx=12, pady=8)
 
-        ctk.CTkLabel(cli_row, text="Cliente *", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=(0,8))
-
-        self._cli_toggle_btn = ctk.CTkButton(
-            cli_row, text="🔍 Desde BD", width=120,
-            fg_color=C["accent"], hover_color=C["accent2"],
-            text_color=C["text_inv"], font=("Segoe UI", 10, "bold"),
-            command=self._toggle_cliente_modo)
-        self._cli_toggle_btn.pack(side="left", padx=(0,8))
-
-        # Frame BD mode
-        self._cli_bd_frame = ctk.CTkFrame(cli_row, fg_color="transparent")
-        self._cli_bd_frame.pack(side="left", fill="x", expand=True)
-        self.cli_var = ctk.StringVar()
-        self.cli_menu = ctk.CTkOptionMenu(self._cli_bd_frame, variable=self.cli_var,
-                                           values=["Cargando..."], width=280,
-                                           fg_color=C["input_bg"], button_color=C["accent"],
-                                           text_color=C["text"],
-                                           font=("Segoe UI",11))
-        self.cli_menu.pack(side="left", fill="x", expand=True)
-
-        # Frame Ocasional mode (hidden initially)
-        self._cli_ocas_frame = ctk.CTkFrame(cli_row, fg_color="transparent")
-        ctk.CTkLabel(self._cli_ocas_frame, text="RUC/CI:", text_color=C["muted"],
-                     font=("Segoe UI",10)).pack(side="left", padx=(0,2))
+        ctk.CTkLabel(cli_row, text="RUC/CI:", text_color=C["muted"],
+                     font=("Segoe UI", 11)).pack(side="left", padx=(0, 4))
         self.cli_ruc_var = ctk.StringVar()
-        self._cli_ruc_entry = ctk.CTkEntry(self._cli_ocas_frame, textvariable=self.cli_ruc_var,
-                                            width=120, fg_color=C["input_bg"],
-                                            text_color=C["text"], font=("Segoe UI",11),
-                                            placeholder_text="Ej: 3.456.789-0")
-        self._cli_ruc_entry.pack(side="left", padx=2)
-        self.cli_ruc_var.trace_add("write", self._format_ruc)
+        self._cli_ruc_entry = ctk.CTkEntry(
+            cli_row, textvariable=self.cli_ruc_var, width=140,
+            fg_color=C["input_bg"], text_color=C["text"],
+            font=("Segoe UI", 11), placeholder_text="RUC o Cédula")
+        self._cli_ruc_entry.pack(side="left", padx=(0, 6))
+        self.cli_ruc_var.trace_add("write", self._on_ruc_change)
 
-        ctk.CTkLabel(self._cli_ocas_frame, text="Nombre:", text_color=C["muted"],
-                     font=("Segoe UI",10)).pack(side="left", padx=(6,2))
+        ctk.CTkLabel(cli_row, text="Nombre / Razón Social:", text_color=C["muted"],
+                     font=("Segoe UI", 11)).pack(side="left", padx=(0, 4))
         self.cli_nombre_var = ctk.StringVar()
-        ctk.CTkEntry(self._cli_ocas_frame, textvariable=self.cli_nombre_var,
-                     width=160, fg_color=C["input_bg"],
-                     text_color=C["text"], font=("Segoe UI",11),
-                     placeholder_text="Razón Social").pack(side="left", padx=2)
+        self._cli_nombre_entry = ctk.CTkEntry(
+            cli_row, textvariable=self.cli_nombre_var, width=260,
+            fg_color=C["input_bg"], text_color=C["text"],
+            font=("Segoe UI", 11), placeholder_text="Razón Social del cliente")
+        self._cli_nombre_entry.pack(side="left", padx=(0, 8))
 
-        self.cond  = field(top, "Condición", 0, col=1, choices=["CONTADO","CREDITO"])
-        self.fecha = field(top, "Fecha", 1, col=0, default=str(date.today()))
-        self.obs   = field(top, "Observación", 1, col=1, default="")
+        btn(cli_row, "Nuevo cliente", self._nuevo_cliente, C["accent2"], "➕").pack(side="left", padx=4)
 
-        # ── Tabs: Modo Base de Datos / Modo Manual ──
-        ctk.CTkLabel(self, text="  Agregar Ítems",
-                     font=("Segoe UI",13,"bold"), text_color=C["text"]).pack(anchor="w", padx=16, pady=(4,0))
+        # Estado de búsqueda de cliente
+        self._cli_status_lbl = ctk.CTkLabel(cli_row, text="",
+                                             font=("Segoe UI", 10), text_color=C["muted"])
+        self._cli_status_lbl.pack(side="left", padx=8)
 
-        tab_frame = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10,
-                                 border_width=1, border_color=C["border"])
-        tab_frame.pack(fill="x", padx=16, pady=4)
+        self.cond  = field(top, "Condición", 1, col=0, choices=["CONTADO", "CREDITO"])
+        self.fecha = field(top, "Fecha",     2, col=0, default=str(date.today()))
+        self.obs   = field(top, "Observación", 2, col=1, default="")
 
-        # Tab buttons
-        tab_bar = ctk.CTkFrame(tab_frame, fg_color=C["border"], height=36)
-        tab_bar.pack(fill="x")
-        tab_bar.pack_propagate(False)
-        self._tab_db_btn = ctk.CTkButton(tab_bar, text="📦 Desde Base de Datos",
-                                          fg_color=C["accent"], text_color=C["text_inv"],
-                                          hover_color=C["accent2"],
-                                          font=("Segoe UI", 11, "bold"),
-                                          corner_radius=0, height=36,
-                                          command=lambda: self._switch_tab("db"))
-        self._tab_db_btn.pack(side="left", padx=(0,1))
-        self._tab_manual_btn = ctk.CTkButton(tab_bar, text="✏️ Carga Manual",
-                                              fg_color=C["panel"], text_color=C["text"],
-                                              hover_color=C["accent2"],
-                                              font=("Segoe UI", 11),
-                                              corner_radius=0, height=36,
-                                              command=lambda: self._switch_tab("manual"))
-        self._tab_manual_btn.pack(side="left")
+        # ── Sección Agregar Ítems ──
+        ctk.CTkLabel(self, text="  Agregar Ítem",
+                     font=("Segoe UI", 13, "bold"), text_color=C["text"]).pack(
+                         anchor="w", padx=16, pady=(4, 0))
 
-        # Tab content: Database mode
-        self._tab_db = ctk.CTkFrame(tab_frame, fg_color=C["panel"])
-        self._tab_db.pack(fill="x", padx=8, pady=8)
+        item_frame = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10,
+                                  border_width=1, border_color=C["border"])
+        item_frame.pack(fill="x", padx=16, pady=4)
 
-        db_row = ctk.CTkFrame(self._tab_db, fg_color="transparent")
-        db_row.pack(fill="x")
+        item_row = ctk.CTkFrame(item_frame, fg_color="transparent")
+        item_row.pack(fill="x", padx=8, pady=8)
 
-        ctk.CTkLabel(db_row, text="Producto", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=(0,4))
-        self.prod_var = ctk.StringVar()
-        self.prod_menu = ctk.CTkOptionMenu(db_row, variable=self.prod_var,
-                                            values=["Cargando..."], width=260,
-                                            fg_color=C["input_bg"], button_color=C["accent"],
-                                            text_color=C["text"],
-                                            font=("Segoe UI",11),
-                                            command=self._on_prod_select)
-        self.prod_menu.pack(side="left", padx=4)
+        ctk.CTkLabel(item_row, text="Código:", text_color=C["muted"],
+                     font=("Segoe UI", 11)).pack(side="left", padx=(0, 3))
+        self._cod_var = ctk.StringVar()
+        self._cod_entry = ctk.CTkEntry(item_row, textvariable=self._cod_var, width=90,
+                                       fg_color=C["input_bg"], text_color=C["text"],
+                                       font=("Segoe UI", 11), placeholder_text="Cód.")
+        self._cod_entry.pack(side="left", padx=(0, 6))
+        self._cod_var.trace_add("write", self._on_cod_change)
 
-        ctk.CTkLabel(db_row, text="Cant.", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=4)
-        self.cant_db = ctk.CTkEntry(db_row, width=60, fg_color=C["input_bg"],
-                                     text_color=C["text"], font=("Segoe UI",11))
-        self.cant_db.insert(0,"1")
-        self.cant_db.pack(side="left", padx=4)
+        ctk.CTkLabel(item_row, text="Descripción:", text_color=C["muted"],
+                     font=("Segoe UI", 11)).pack(side="left", padx=(0, 3))
+        self._desc_var = ctk.StringVar()
+        self._desc_entry = ctk.CTkEntry(item_row, textvariable=self._desc_var, width=190,
+                                        fg_color=C["input_bg"], text_color=C["text"],
+                                        font=("Segoe UI", 11), placeholder_text="Descripción del ítem")
+        self._desc_entry.pack(side="left", padx=(0, 6))
 
-        ctk.CTkLabel(db_row, text="Precio", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=4)
-        self._precio_db_var = ctk.StringVar()
-        self.precio_db = ctk.CTkEntry(db_row, textvariable=self._precio_db_var,
-                                       width=110, fg_color=C["input_bg"],
-                                       text_color=C["text"], font=("Segoe UI",11))
-        self.precio_db.pack(side="left", padx=4)
-        self._precio_db_var.trace_add("write", format_gs_input(self._precio_db_var, self.precio_db))
+        ctk.CTkLabel(item_row, text="Cant.:", text_color=C["muted"],
+                     font=("Segoe UI", 11)).pack(side="left", padx=(0, 3))
+        self._cant_entry = ctk.CTkEntry(item_row, width=55,
+                                        fg_color=C["input_bg"], text_color=C["text"],
+                                        font=("Segoe UI", 11))
+        self._cant_entry.insert(0, "1")
+        self._cant_entry.pack(side="left", padx=(0, 6))
 
-        btn(db_row, "Agregar", self._agregar_db, C["success"], "➕").pack(side="left", padx=8)
+        ctk.CTkLabel(item_row, text="Precio:", text_color=C["muted"],
+                     font=("Segoe UI", 11)).pack(side="left", padx=(0, 3))
+        self._precio_var = ctk.StringVar()
+        self._precio_entry = ctk.CTkEntry(item_row, textvariable=self._precio_var, width=110,
+                                          fg_color=C["input_bg"], text_color=C["text"],
+                                          font=("Segoe UI", 11), placeholder_text="0")
+        self._precio_entry.pack(side="left", padx=(0, 6))
+        self._precio_var.trace_add("write", format_gs_input(self._precio_var, self._precio_entry))
 
-        # Tab content: Manual mode
-        self._tab_manual = ctk.CTkFrame(tab_frame, fg_color=C["panel"])
+        ctk.CTkLabel(item_row, text="IVA%:", text_color=C["muted"],
+                     font=("Segoe UI", 11)).pack(side="left", padx=(0, 3))
+        self._iva_var = ctk.StringVar(value="10")
+        ctk.CTkOptionMenu(item_row, variable=self._iva_var, values=["10", "5", "0"],
+                          width=65, fg_color=C["input_bg"], button_color=C["accent"],
+                          text_color=C["text"], font=("Segoe UI", 11)).pack(side="left", padx=(0, 8))
 
-        man_row = ctk.CTkFrame(self._tab_manual, fg_color="transparent")
-        man_row.pack(fill="x")
+        btn(item_row, "Agregar", self._agregar_item, C["success"], "➕").pack(side="left")
 
-        ctk.CTkLabel(man_row, text="Descripción", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=(0,4))
-        self.desc_manual = ctk.CTkEntry(man_row, width=200, fg_color=C["input_bg"],
-                                         text_color=C["text"], font=("Segoe UI",11))
-        self.desc_manual.pack(side="left", padx=4)
+        # Status de búsqueda de producto
+        self._prod_status_lbl = ctk.CTkLabel(item_frame, text="",
+                                              font=("Segoe UI", 10), text_color=C["muted"])
+        self._prod_status_lbl.pack(anchor="w", padx=12, pady=(0, 6))
 
-        ctk.CTkLabel(man_row, text="Precio", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=4)
-        self._precio_manual_var = ctk.StringVar()
-        self.precio_manual = ctk.CTkEntry(man_row, textvariable=self._precio_manual_var,
-                                           width=100, fg_color=C["input_bg"],
-                                           text_color=C["text"], font=("Segoe UI",11))
-        self.precio_manual.pack(side="left", padx=4)
-        self._precio_manual_var.trace_add("write", format_gs_input(self._precio_manual_var, self.precio_manual))
-
-        ctk.CTkLabel(man_row, text="Cant.", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=4)
-        self.cant_manual = ctk.CTkEntry(man_row, width=50, fg_color=C["input_bg"],
-                                         text_color=C["text"], font=("Segoe UI",11))
-        self.cant_manual.insert(0, "1")
-        self.cant_manual.pack(side="left", padx=4)
-
-        ctk.CTkLabel(man_row, text="IVA%", text_color=C["muted"],
-                     font=("Segoe UI",11)).pack(side="left", padx=4)
-        self.iva_manual = ctk.StringVar(value="10")
-        ctk.CTkOptionMenu(man_row, variable=self.iva_manual, values=["10","5","0"],
-                          width=60, fg_color=C["input_bg"], button_color=C["accent"],
-                          text_color=C["text"],
-                          font=("Segoe UI",11)).pack(side="left", padx=4)
-
-        btn(man_row, "Agregar", self._agregar_manual, C["success"], "➕").pack(side="left", padx=8)
-
-        # ── Items table ──
-        cols = ["#","Descripción","Cant.","Precio","IVA%","Total"]
-        widths = [30,240,60,120,60,130]
+        # ── Tabla de ítems ──
+        cols = ["#", "Descripción", "Cant.", "Precio", "IVA%", "Total"]
+        widths = [30, 260, 60, 120, 60, 130]
         tf, self.items_tree = make_table(self, cols, widths)
         tf.pack(fill="both", expand=True, padx=16, pady=4)
         self.items_tree.bind("<Delete>", lambda e: self._quitar())
 
-        # ── Totals bar ──
+        # ── Barra de totales ──
         bot = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10,
                            border_width=1, border_color=C["border"])
         bot.pack(fill="x", padx=16, pady=4)
         self.total_lbl = ctk.CTkLabel(bot, text="Total: Gs. 0",
-                                       font=("Segoe UI",14,"bold"), text_color=C["success"])
+                                       font=("Segoe UI", 14, "bold"), text_color=C["success"])
         self.total_lbl.pack(side="right", padx=16, pady=8)
         ctk.CTkLabel(bot, text="Presione Delete para quitar un ítem",
-                     text_color=C["muted"], font=("Segoe UI",10)).pack(side="left", padx=16)
+                     text_color=C["muted"], font=("Segoe UI", 10)).pack(side="left", padx=16)
 
-        # ── Bottom buttons ──
+        # ── Botones inferiores ──
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=16, pady=8)
         btn(bbar, "Vista Previa", self._vista_previa, C["accent"], "👁️").pack(side="right", padx=4)
         btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
 
-        # Pre-fill if editing
         if self.edit_data:
             self._prefill_edit()
 
-    def _switch_tab(self, tab):
-        if tab == "db":
-            self._tab_manual.pack_forget()
-            self._tab_db.pack(fill="x", padx=8, pady=8)
-            self._tab_db_btn.configure(fg_color=C["accent"], text_color=C["text_inv"],
-                                        font=("Segoe UI", 11, "bold"))
-            self._tab_manual_btn.configure(fg_color=C["panel"], text_color=C["text"],
-                                            font=("Segoe UI", 11))
-        else:
-            self._tab_db.pack_forget()
-            self._tab_manual.pack(fill="x", padx=8, pady=8)
-            self._tab_manual_btn.configure(fg_color=C["accent"], text_color=C["text_inv"],
-                                            font=("Segoe UI", 11, "bold"))
-            self._tab_db_btn.configure(fg_color=C["panel"], text_color=C["text"],
-                                        font=("Segoe UI", 11))
+    # ── Búsqueda de cliente por RUC ──────────────────────────────────────────
+    def _on_ruc_change(self, *args):
+        if self._cli_search_after:
+            self.after_cancel(self._cli_search_after)
+        self._cli_search_after = self.after(600, self._buscar_cliente_ruc)
 
-    def _toggle_cliente_modo(self):
-        self._modo_ocasional = not self._modo_ocasional
-        if self._modo_ocasional:
-            self._cli_bd_frame.pack_forget()
-            self._cli_ocas_frame.pack(side="left", fill="x", expand=True)
-            self._cli_toggle_btn.configure(text="✏️ Ocasional", fg_color=C["warning"])
-        else:
-            self._cli_ocas_frame.pack_forget()
-            self._cli_bd_frame.pack(side="left", fill="x", expand=True)
-            self._cli_toggle_btn.configure(text="🔍 Desde BD", fg_color=C["accent"])
-
-    def _format_ruc(self, *args):
-        # RUC paraguayo: solo numeros y guion — sin formato de puntos
-        pass
-
-    def _get_cliente_ocasional_id(self):
-        """Get client ID for occasional client: CONSUMIDOR FINAL or first available."""
-        for c in self._clientes:
-            if "CONSUMIDOR FINAL" in (c.get("razon_social", "") or "").upper():
-                return c["id"]
-        if self._clientes:
-            return self._clientes[0]["id"]
-        return None
-
-    def _prefill_edit(self):
-        d = self.edit_data
-        if d.get("fecha_emision"):
-            self.fecha.set(d["fecha_emision"])
-        if d.get("condicion_venta"):
-            self.cond.set(d["condicion_venta"])
-        if d.get("observacion"):
-            self.obs.set(d["observacion"])
-        # Detalles are already in self._detalles
-        self._refresh_items()
-
-    def _load_data(self):
-        try:
-            self._clientes = client.get("/clientes").json()
-            self._productos = client.get("/productos").json()
-            cli_opts  = [f"{c['id']} - {c['razon_social']}" for c in self._clientes]
-            prod_opts = [f"{p['id']} - {p['descripcion']}" for p in self._productos]
-            self.after(0, lambda: self.cli_menu.configure(values=cli_opts or ["Sin clientes"]))
-            self.after(0, lambda: self.prod_menu.configure(values=prod_opts or ["Sin productos"]))
-            if cli_opts:
-                if self.edit_data and self.edit_data.get("cliente_id"):
-                    cid = self.edit_data["cliente_id"]
-                    match = next((o for o in cli_opts if o.startswith(f"{cid} -")), cli_opts[0])
-                    self.after(0, lambda: self.cli_var.set(match))
+    def _buscar_cliente_ruc(self):
+        ruc = self.cli_ruc_var.get().strip()
+        if not ruc:
+            self._cliente_id = None
+            self._cli_status_lbl.configure(text="", text_color=C["muted"])
+            return
+        def do():
+            try:
+                r = client.get("/clientes/buscar", params={"ruc": ruc})
+                if r.status_code == 200:
+                    c = r.json()
+                    self._cliente_id = c["id"]
+                    nombre = c.get("razon_social", "")
+                    self.after(0, lambda: self.cli_nombre_var.set(nombre))
+                    self.after(0, lambda: self._cli_status_lbl.configure(
+                        text=f"✓ Cliente encontrado", text_color=C["success"]))
                 else:
-                    self.after(0, lambda: self.cli_var.set(cli_opts[0]))
-            if prod_opts:
-                self.after(0, lambda: self.prod_var.set(prod_opts[0]))
-                p0 = self._productos[0]
-                self.after(0, lambda: self._precio_db_var.set(str(int(float(p0["precio_unitario"])))))
-        except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Error", str(e)))
+                    self._cliente_id = None
+                    self.after(0, lambda: self._cli_status_lbl.configure(
+                        text="⚠ No registrado — se cargará como ocasional", text_color=C["warning"]))
+            except Exception:
+                self._cliente_id = None
+        threading.Thread(target=do, daemon=True).start()
 
-    def _on_prod_select(self, choice):
-        try:
-            pid = int(choice.split(" - ")[0])
-            prod = next((p for p in self._productos if p["id"] == pid), None)
-            if prod:
-                self._precio_db_var.set(str(int(float(prod["precio_unitario"]))))
-        except Exception:
-            pass
+    def _nuevo_cliente(self):
+        def on_guardado():
+            ruc = self.cli_ruc_var.get().strip()
+            if ruc:
+                self._buscar_cliente_ruc()
+        ClienteForm(self, None, on_save=on_guardado)
 
-    def _agregar_db(self):
-        ps = self.prod_var.get()
-        if not ps or ps in ("Cargando...","Sin productos"): return
-        pid = int(ps.split(" - ")[0])
-        prod = next((p for p in self._productos if p["id"] == pid), None)
-        if not prod: return
-        try:
-            cant  = float(self.cant_db.get())
-            precio = float(self.precio_db.get().replace(".","").replace(",","."))
-        except ValueError:
-            return messagebox.showerror("Error","Cantidad/precio inválido")
+    # ── Búsqueda de producto por código ─────────────────────────────────────
+    def _on_cod_change(self, *args):
+        if self._cod_search_after:
+            self.after_cancel(self._cod_search_after)
+        self._cod_search_after = self.after(500, self._buscar_producto_codigo)
 
-        self._detalles.append({
-            "orden": len(self._detalles)+1,
-            "producto_id": pid,
-            "descripcion": prod["descripcion"],
-            "cantidad": cant,
-            "precio_unitario": precio,
-            "tasa_iva": prod["tasa_iva"],
-        })
-        self._refresh_items()
+    def _buscar_producto_codigo(self):
+        cod = self._cod_var.get().strip()
+        if not cod:
+            self._prod_id = None
+            self._prod_status_lbl.configure(text="")
+            return
+        def do():
+            try:
+                r = client.get("/productos/buscar", params={"codigo": cod})
+                if r.status_code == 200:
+                    p = r.json()
+                    self._prod_id = p["id"]
+                    precio_str = str(int(float(p.get("precio_unitario", 0))))
+                    iva_str = str(p.get("tasa_iva", "10"))
+                    self.after(0, lambda: self._desc_var.set(p.get("descripcion", "")))
+                    self.after(0, lambda: self._precio_var.set(precio_str))
+                    self.after(0, lambda: self._iva_var.set(iva_str))
+                    self.after(0, lambda: self._prod_status_lbl.configure(
+                        text=f"✓  {p.get('descripcion', '')}", text_color=C["success"]))
+                else:
+                    self._prod_id = None
+                    self.after(0, lambda: self._prod_status_lbl.configure(
+                        text="Código no encontrado — completar datos manualmente",
+                        text_color=C["warning"]))
+            except Exception:
+                self._prod_id = None
+        threading.Thread(target=do, daemon=True).start()
 
-    def _agregar_manual(self):
-        desc = self.desc_manual.get().strip()
+    # ── Agregar ítem unificado ───────────────────────────────────────────────
+    def _agregar_item(self):
+        desc = self._desc_var.get().strip()
         if not desc:
-            return messagebox.showerror("Error", "Ingrese una descripción")
+            return messagebox.showerror("Error", "Ingrese una descripción del ítem")
         try:
-            cant  = float(self.cant_manual.get())
-            precio = float(self.precio_manual.get().replace(".","").replace(",","."))
+            cant = float(self._cant_entry.get())
+            precio = float(self._precio_var.get().replace(".", "").replace(",", "."))
         except ValueError:
-            return messagebox.showerror("Error","Cantidad/precio inválido")
+            return messagebox.showerror("Error", "Cantidad y precio deben ser números válidos")
+        if cant <= 0 or precio < 0:
+            return messagebox.showerror("Error", "Cantidad debe ser mayor a 0")
 
         self._detalles.append({
-            "orden": len(self._detalles)+1,
-            "producto_id": None,
+            "orden": len(self._detalles) + 1,
+            "producto_id": self._prod_id,
             "descripcion": desc,
             "cantidad": cant,
             "precio_unitario": precio,
-            "tasa_iva": str(self.iva_manual.get()),
+            "tasa_iva": str(self._iva_var.get()),
         })
         self._refresh_items()
-        self.desc_manual.delete(0, "end")
-        self._precio_manual_var.set("")
+
+        # Limpiar campos para próximo ítem
+        self._cod_var.set("")
+        self._desc_var.set("")
+        self._cant_entry.delete(0, "end")
+        self._cant_entry.insert(0, "1")
+        self._precio_var.set("")
+        self._iva_var.set("10")
+        self._prod_id = None
+        self._prod_status_lbl.configure(text="")
+        self._cod_entry.focus()
 
     def _refresh_items(self):
         for i in self.items_tree.get_children():
@@ -1173,7 +1096,7 @@ class FacturaForm(ctk.CTkToplevel):
         for idx, d in enumerate(self._detalles):
             total = d["cantidad"] * d["precio_unitario"]
             self.items_tree.insert("", "end", values=(
-                idx+1, d["descripcion"],
+                idx + 1, d["descripcion"],
                 int(d["cantidad"]), gs(d["precio_unitario"]),
                 f"{d['tasa_iva']}%", gs(total)))
         apply_zebra(self.items_tree)
@@ -1190,30 +1113,64 @@ class FacturaForm(ctk.CTkToplevel):
         total = sum(d["cantidad"] * d["precio_unitario"] for d in self._detalles)
         self.total_lbl.configure(text=f"Total: {gs(total)}")
 
-    def _vista_previa(self):
-        """Save as draft then open preview."""
-        if not self._detalles:
-            return messagebox.showerror("Error","Agregue al menos un ítem")
+    def _prefill_edit(self):
+        d = self.edit_data
+        if d.get("fecha_emision"):
+            self.fecha.set(d["fecha_emision"])
+        if d.get("condicion_venta"):
+            self.cond.set(d["condicion_venta"])
+        if d.get("observacion"):
+            self.obs.set(d["observacion"])
+        self._refresh_items()
 
-        if self._modo_ocasional:
-            ruc = self.cli_ruc_var.get().strip()
-            nombre = self.cli_nombre_var.get().strip()
-            if not ruc or not nombre:
-                return messagebox.showerror("Error","Ingrese RUC/CI y Nombre del cliente ocasional")
-            cid = self._get_cliente_ocasional_id()
-            if cid is None:
-                return messagebox.showerror("Error","No hay clientes disponibles en la base de datos")
-            obs_base = self.obs.get() or ""
-            obs_ocas = f"[Cliente Ocasional] RUC: {ruc} | Nombre: {nombre}"
-            observacion = f"{obs_ocas} | {obs_base}" if obs_base else obs_ocas
-            cli_name = f"{nombre} (RUC: {ruc})"
-        else:
-            cs = self.cli_var.get()
-            if not cs or cs in ("Cargando...","Sin clientes"):
-                return messagebox.showerror("Error","Seleccione cliente")
-            cid = int(cs.split(" - ")[0])
+    def _load_data(self):
+        try:
+            self._clientes = client.get("/clientes").json()
+            # Pre-fill if editing and client_id known
+            if self.edit_data and self.edit_data.get("cliente_id"):
+                cid = self.edit_data["cliente_id"]
+                cli = next((c for c in self._clientes if c["id"] == cid), None)
+                if cli:
+                    self._cliente_id = cid
+                    self.after(0, lambda: self.cli_ruc_var.set(cli.get("ruc_ci", "")))
+                    self.after(0, lambda: self.cli_nombre_var.set(cli.get("razon_social", "")))
+        except Exception:
+            pass
+
+    def _get_ocasional_cliente_id(self):
+        """Fallback: buscar o usar CONSUMIDOR FINAL."""
+        for c in self._clientes:
+            if "CONSUMIDOR FINAL" in (c.get("razon_social", "") or "").upper():
+                return c["id"]
+        if self._clientes:
+            return self._clientes[0]["id"]
+        return None
+
+    def _vista_previa(self):
+        """Guarda como borrador y abre vista previa."""
+        if not self._detalles:
+            return messagebox.showerror("Error", "Agregue al menos un ítem a la factura")
+
+        ruc    = self.cli_ruc_var.get().strip()
+        nombre = self.cli_nombre_var.get().strip()
+
+        if self._cliente_id is not None:
+            cid = self._cliente_id
             observacion = self.obs.get() or None
-            cli_name = cs.split(" - ", 1)[1] if " - " in cs else "—"
+            cli_name = nombre or ruc or "—"
+        else:
+            # Cliente ocasional: guardar datos en observacion
+            if not nombre:
+                return messagebox.showerror("Error",
+                    "Ingrese el Nombre / Razón Social del cliente")
+            cid = self._get_ocasional_cliente_id()
+            if cid is None:
+                return messagebox.showerror("Error",
+                    "No hay clientes disponibles. Cree al menos un cliente antes de facturar.")
+            obs_ocas = f"[Cliente Ocasional] RUC: {ruc} | Nombre: {nombre}" if ruc else f"[Cliente Ocasional] Nombre: {nombre}"
+            obs_base = self.obs.get() or ""
+            observacion = f"{obs_ocas} | {obs_base}" if obs_base else obs_ocas
+            cli_name = f"{nombre}" + (f" (RUC: {ruc})" if ruc else "")
 
         payload = {
             "fecha_emision": self.fecha.get(),
@@ -1222,6 +1179,7 @@ class FacturaForm(ctk.CTkToplevel):
             "observacion": observacion,
             "detalles": self._detalles,
         }
+
         def do():
             try:
                 if self.edit_data and self.edit_data.get("id"):
@@ -1232,10 +1190,13 @@ class FacturaForm(ctk.CTkToplevel):
                     factura_data = r.json()
                     self.after(0, lambda: self._open_preview(factura_data, cli_name))
                 else:
-                    msg = r.json().get("detail", r.text)
-                    self.after(0, lambda: messagebox.showerror("Error", str(msg)))
+                    try:
+                        msg = r.json().get("detail", r.text)
+                    except Exception:
+                        msg = r.text
+                    self.after(0, lambda: messagebox.showerror("Error al guardar factura", str(msg)))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+                self.after(0, lambda: messagebox.showerror("Error de conexión", str(e)))
         threading.Thread(target=do, daemon=True).start()
 
     def _open_preview(self, factura_data, cli_name):
@@ -1244,7 +1205,6 @@ class FacturaForm(ctk.CTkToplevel):
                             on_edit=lambda data: self._return_to_edit(data))
 
     def _return_to_edit(self, data):
-        # Update edit data and reload detalles
         self.edit_data = data
         if data.get("detalles"):
             self._detalles = list(data["detalles"])
@@ -1253,6 +1213,8 @@ class FacturaForm(ctk.CTkToplevel):
 
 # ── Vista Previa de Factura ──────────────────────────────────────────────────
 class VistaPreviewFactura(ctk.CTkToplevel):
+    """Vista previa de factura con diseño de comprobante real (SET / DNIT Paraguay)."""
+
     def __init__(self, parent, factura, cli_name, on_emitir_done, on_edit):
         super().__init__(parent)
         self.factura = factura
@@ -1260,128 +1222,254 @@ class VistaPreviewFactura(ctk.CTkToplevel):
         self.on_emitir_done = on_emitir_done
         self.on_edit = on_edit
         self.title("Vista Previa — Factura")
-        self.geometry("700x650")
+        self.geometry("820x760")
         self.configure(fg_color=C["bg"])
         self.grab_set()
+        # Cargar datos de empresa de forma síncrona (es rápido, está en localhost)
+        self._empresa = {}
+        try:
+            r = client.get("/config/empresa")
+            if r.status_code == 200:
+                self._empresa = r.json() or {}
+        except Exception:
+            pass
         self._build()
 
-    def _build(self):
-        # Scrollable content
-        scroll = ctk.CTkScrollableFrame(self, fg_color=C["bg"])
-        scroll.pack(fill="both", expand=True, padx=16, pady=(8, 4))
+    def _label(self, parent, text, bold=False, size=10, color=None, **kwargs):
+        font = ("Segoe UI", size, "bold") if bold else ("Segoe UI", size)
+        return ctk.CTkLabel(parent, text=text, font=font,
+                            text_color=color or C["text"], **kwargs)
 
-        # ── Company header ──
-        header = ctk.CTkFrame(scroll, fg_color=C["header"], corner_radius=10)
-        header.pack(fill="x", pady=(0, 8))
-        h_inner = ctk.CTkFrame(header, fg_color="transparent")
-        h_inner.pack(fill="x", padx=16, pady=12)
+    def _build(self):
+        estado = self.factura.get("estado", "BORRADOR")
+        emp = self._empresa
+
+        # ── Scroll container ──
+        scroll = ctk.CTkScrollableFrame(self, fg_color=C["bg"])
+        scroll.pack(fill="both", expand=True, padx=12, pady=(8, 4))
+
+        # ══════════════════════════════════════════════════
+        # BLOQUE 1: Encabezado del emisor
+        # ══════════════════════════════════════════════════
+        emisor_frame = ctk.CTkFrame(scroll, fg_color=C["header"], corner_radius=10)
+        emisor_frame.pack(fill="x", pady=(0, 4))
+        em_inner = ctk.CTkFrame(emisor_frame, fg_color="transparent")
+        em_inner.pack(fill="x", padx=16, pady=12)
+
         logo_img = _load_logo(100, 33)
         if logo_img:
-            ctk.CTkLabel(h_inner, image=logo_img, text="").pack(side="left")
-        ctk.CTkLabel(h_inner, text="  FACTURA", font=("Segoe UI", 18, "bold"),
-                     text_color=C["text_inv"]).pack(side="left", padx=8)
+            ctk.CTkLabel(em_inner, image=logo_img, text="").pack(side="left", padx=(0, 12))
 
-        estado = self.factura.get("estado", "BORRADOR")
+        em_text = ctk.CTkFrame(em_inner, fg_color="transparent")
+        em_text.pack(side="left", fill="x", expand=True)
+
+        razon = emp.get("razon_social") or "— Empresa no configurada —"
+        ruc_emisor = emp.get("ruc") or "—"
+        dir_emisor = emp.get("direccion") or ""
+        ciudad_emisor = emp.get("ciudad") or ""
+        tel_emisor = emp.get("telefono") or ""
+
+        self._label(em_text, razon, bold=True, size=14, color=C["text_inv"]).pack(anchor="w")
+        self._label(em_text, f"RUC: {ruc_emisor}", size=11, color=C["text_inv"]).pack(anchor="w")
+        if dir_emisor:
+            self._label(em_text, f"{dir_emisor}{(' — ' + ciudad_emisor) if ciudad_emisor else ''}",
+                        size=10, color="#B0BEC5").pack(anchor="w")
+        if tel_emisor:
+            self._label(em_text, f"Tel.: {tel_emisor}", size=10, color="#B0BEC5").pack(anchor="w")
+
+        # Tipo de documento + estado
+        tipo_frame = ctk.CTkFrame(em_inner, fg_color="transparent")
+        tipo_frame.pack(side="right", anchor="ne")
+        tipo_doc = self.factura.get("tipo_documento", "FACTURA")
+        self._label(tipo_frame, tipo_doc, bold=True, size=16, color=C["text_inv"]).pack(anchor="e")
         estado_color = C["warning"] if estado == "BORRADOR" else C["success"]
-        ctk.CTkLabel(h_inner, text=f"  {estado}  ", font=("Segoe UI", 11, "bold"),
+        ctk.CTkLabel(tipo_frame, text=f"  {estado}  ",
+                     font=("Segoe UI", 10, "bold"),
                      fg_color=estado_color, text_color=C["text_inv"],
-                     corner_radius=6).pack(side="right")
+                     corner_radius=6).pack(anchor="e", pady=(4, 0))
 
-        # ── Factura info ──
-        info = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
-                            border_width=1, border_color=C["border"])
-        info.pack(fill="x", pady=4)
-        info.grid_columnconfigure((0,1,2,3), weight=1)
+        # ══════════════════════════════════════════════════
+        # BLOQUE 2: Aviso BORRADOR (si aplica)
+        # ══════════════════════════════════════════════════
+        if estado == "BORRADOR":
+            aviso = ctk.CTkFrame(scroll, fg_color="#7B1C1C", corner_radius=6)
+            aviso.pack(fill="x", pady=2)
+            ctk.CTkLabel(aviso,
+                         text="⚠  BORRADOR — Este comprobante NO ha sido emitido. No tiene validez fiscal.",
+                         font=("Segoe UI", 11, "bold"), text_color="#FFCCCC").pack(pady=6)
 
-        num = self.factura.get("numero_completo") or "Pendiente"
-        pairs = [
-            ("Número:", num),
-            ("Fecha:", self.factura.get("fecha_emision", "—")),
-            ("Cliente:", self.cli_name),
-            ("Condición:", self.factura.get("condicion_venta", "—")),
+        # ══════════════════════════════════════════════════
+        # BLOQUE 3: Timbrado / Datos del documento
+        # ══════════════════════════════════════════════════
+        tim_frame = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
+                                 border_width=1, border_color=C["border"])
+        tim_frame.pack(fill="x", pady=4)
+        tim_frame.grid_columnconfigure((0,1,2,3,4,5), weight=1)
+
+        timbrado    = emp.get("timbrado") or "—"
+        tim_inicio  = emp.get("timbrado_fecha_inicio") or "—"
+        tim_fin     = emp.get("timbrado_fecha_fin") or "—"
+        estab       = emp.get("establecimiento") or "001"
+        pto_exp     = emp.get("punto_expedicion") or "001"
+        num_doc     = self.factura.get("numero_completo") or "Pendiente"
+        fecha_doc   = self.factura.get("fecha_emision") or "—"
+
+        autoimpreso_lbl = ctk.CTkFrame(tim_frame, fg_color=C["accent2"], corner_radius=4)
+        autoimpreso_lbl.grid(row=0, column=0, columnspan=6, sticky="ew", padx=8, pady=(8, 4))
+        ctk.CTkLabel(autoimpreso_lbl, text="DOCUMENTO AUTOIMPRESO",
+                     font=("Segoe UI", 10, "bold"), text_color=C["text_inv"]).pack(pady=3)
+
+        datos_doc = [
+            ("Timbrado N°:", timbrado),
+            ("Vigencia:", f"{tim_inicio}  al  {tim_fin}"),
+            ("Establecimiento:", estab),
+            ("Pto. Expedición:", pto_exp),
+            ("N° Comprobante:", num_doc),
+            ("Fecha:", fecha_doc),
         ]
-        for i, (lbl, val) in enumerate(pairs):
-            r, c = divmod(i, 2)
-            ctk.CTkLabel(info, text=lbl, text_color=C["muted"],
-                         font=("Segoe UI", 10)).grid(row=r, column=c*2, padx=(12,4), pady=6, sticky="w")
-            ctk.CTkLabel(info, text=val, text_color=C["text"],
-                         font=("Segoe UI", 11, "bold")).grid(row=r, column=c*2+1, padx=(0,12), pady=6, sticky="w")
+        for col_idx, (lbl, val) in enumerate(datos_doc):
+            r_idx = 1 + col_idx // 2
+            c_idx = (col_idx % 2) * 2
+            ctk.CTkLabel(tim_frame, text=lbl, text_color=C["muted"],
+                         font=("Segoe UI", 9)).grid(row=r_idx, column=c_idx,
+                                                     padx=(12, 2), pady=3, sticky="w")
+            ctk.CTkLabel(tim_frame, text=val, text_color=C["text"],
+                         font=("Segoe UI", 10, "bold")).grid(row=r_idx, column=c_idx+1,
+                                                              padx=(0, 12), pady=3, sticky="w")
 
-        # ── Items table ──
+        # Condicion de venta
+        cond_val = self.factura.get("condicion_venta", "CONTADO")
+        cond_frame = ctk.CTkFrame(tim_frame, fg_color="transparent")
+        cond_frame.grid(row=4, column=0, columnspan=6, sticky="w", padx=8, pady=(2, 8))
+        ctk.CTkLabel(cond_frame, text="Condición de Venta:", text_color=C["muted"],
+                     font=("Segoe UI", 9)).pack(side="left", padx=(4, 4))
+        ctk.CTkLabel(cond_frame, text=cond_val, text_color=C["accent"],
+                     font=("Segoe UI", 10, "bold")).pack(side="left")
+
+        # ══════════════════════════════════════════════════
+        # BLOQUE 4: Datos del cliente
+        # ══════════════════════════════════════════════════
+        cli_frame = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
+                                 border_width=1, border_color=C["border"])
+        cli_frame.pack(fill="x", pady=4)
+        ctk.CTkLabel(cli_frame, text="DATOS DEL COMPRADOR",
+                     font=("Segoe UI", 9, "bold"), text_color=C["muted"]).pack(
+                         anchor="w", padx=12, pady=(8, 2))
+
+        cli_row_frame = ctk.CTkFrame(cli_frame, fg_color="transparent")
+        cli_row_frame.pack(fill="x", padx=12, pady=(0, 8))
+        ctk.CTkLabel(cli_row_frame, text="Nombre / Razón Social:", text_color=C["muted"],
+                     font=("Segoe UI", 10)).pack(side="left")
+        ctk.CTkLabel(cli_row_frame, text=f"  {self.cli_name}",
+                     text_color=C["text"], font=("Segoe UI", 11, "bold")).pack(side="left")
+
+        # Observación (contiene RUC del cliente ocasional si aplica)
+        obs = self.factura.get("observacion") or ""
+        if obs:
+            obs_row = ctk.CTkFrame(cli_frame, fg_color="transparent")
+            obs_row.pack(fill="x", padx=12, pady=(0, 6))
+            ctk.CTkLabel(obs_row, text="Obs.:", text_color=C["muted"],
+                         font=("Segoe UI", 9)).pack(side="left")
+            ctk.CTkLabel(obs_row, text=f"  {obs}", text_color=C["text"],
+                         font=("Segoe UI", 9)).pack(side="left")
+
+        # ══════════════════════════════════════════════════
+        # BLOQUE 5: Tabla de ítems
+        # ══════════════════════════════════════════════════
         items_frame = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
                                    border_width=1, border_color=C["border"])
         items_frame.pack(fill="x", pady=4)
 
-        ctk.CTkLabel(items_frame, text="Detalle de Ítems", font=("Segoe UI", 12, "bold"),
-                     text_color=C["text"]).pack(anchor="w", padx=12, pady=(8,4))
-
-        # Table header
+        # Encabezado de tabla
         th = ctk.CTkFrame(items_frame, fg_color=C["header"], corner_radius=0)
-        th.pack(fill="x", padx=8)
-        cols_def = [("#", 30), ("Descripción", 220), ("Cant.", 50), ("P. Unit.", 100),
-                    ("IVA%", 50), ("Subtotal", 110)]
+        th.pack(fill="x", padx=8, pady=(8, 0))
+        cols_def = [("#", 28), ("Descripción", 240), ("Cant.", 52), ("P. Unit.", 110),
+                    ("IVA%", 48), ("Subtotal", 115)]
         for label, w in cols_def:
             ctk.CTkLabel(th, text=label, text_color=C["text_inv"],
-                         font=("Segoe UI", 10, "bold"), width=w).pack(side="left", padx=4, pady=4)
+                         font=("Segoe UI", 9, "bold"), width=w).pack(side="left", padx=3, pady=4)
 
-        # Table rows
         detalles = self.factura.get("detalles", [])
         for i, d in enumerate(detalles):
             bg = C["row_even"] if i % 2 == 0 else C["row_odd"]
             row = ctk.CTkFrame(items_frame, fg_color=bg, corner_radius=0)
             row.pack(fill="x", padx=8)
-            total_l = float(d.get("total_linea", 0) or (d.get("cantidad",0) * d.get("precio_unitario",0)))
+            total_l = float(d.get("total_linea", 0) or
+                            (float(d.get("cantidad", 0)) * float(d.get("precio_unitario", 0))))
             vals = [
-                (str(d.get("orden", i+1)), 30),
-                (d.get("descripcion",""), 220),
-                (str(int(float(d.get("cantidad",0)))), 50),
-                (gs(d.get("precio_unitario",0)), 100),
-                (f"{d.get('tasa_iva',10)}%", 50),
-                (gs(total_l), 110),
+                (str(d.get("orden", i + 1)), 28),
+                (d.get("descripcion", ""), 240),
+                (str(int(float(d.get("cantidad", 0)))), 52),
+                (gs(d.get("precio_unitario", 0)), 110),
+                (f"{d.get('tasa_iva', 10)}%", 48),
+                (gs(total_l), 115),
             ]
             for val, w in vals:
                 ctk.CTkLabel(row, text=val, text_color=C["text"],
-                             font=("Segoe UI", 10), width=w).pack(side="left", padx=4, pady=3)
+                             font=("Segoe UI", 10), width=w).pack(side="left", padx=3, pady=3)
 
-        # ── Totals ──
+        ctk.CTkFrame(items_frame, fg_color=C["border"], height=1).pack(fill="x", padx=8, pady=4)
+
+        # ══════════════════════════════════════════════════
+        # BLOQUE 6: Totales (IVA desglosado)
+        # ══════════════════════════════════════════════════
         totals = ctk.CTkFrame(scroll, fg_color=C["panel"], corner_radius=10,
                               border_width=1, border_color=C["border"])
         totals.pack(fill="x", pady=4)
-        totals.grid_columnconfigure(1, weight=1)
 
-        total_rows = [
-            ("Subtotal Exenta:", gs(self.factura.get("subtotal_exenta", 0))),
-            ("Subtotal Gravada 5%:", gs(self.factura.get("subtotal_gravada_5", 0))),
-            ("Subtotal Gravada 10%:", gs(self.factura.get("subtotal_gravada_10", 0))),
-            ("IVA 5%:", gs(self.factura.get("iva_5", 0))),
-            ("IVA 10%:", gs(self.factura.get("iva_10", 0))),
-            ("Total IVA:", gs(self.factura.get("total_iva", 0))),
+        totals_left = ctk.CTkFrame(totals, fg_color="transparent")
+        totals_left.pack(side="left", fill="both", expand=True, padx=12, pady=8)
+
+        # Notas SET (lado izquierdo)
+        act_economica = emp.get("actividad_economica") or ""
+        if act_economica:
+            ctk.CTkLabel(totals_left, text=f"Actividad: {act_economica}",
+                         font=("Segoe UI", 9), text_color=C["muted"],
+                         wraplength=300, justify="left").pack(anchor="w")
+        ctk.CTkLabel(totals_left,
+                     text="Documento Autoimpreso habilitado por la SET",
+                     font=("Segoe UI", 9), text_color=C["muted"]).pack(anchor="w", pady=(8, 0))
+        if timbrado != "—":
+            ctk.CTkLabel(totals_left, text=f"Timbrado N° {timbrado} — Vigente hasta {tim_fin}",
+                         font=("Segoe UI", 9), text_color=C["muted"]).pack(anchor="w")
+
+        totals_right = ctk.CTkFrame(totals, fg_color="transparent")
+        totals_right.pack(side="right", padx=16, pady=8)
+        totals_right.grid_columnconfigure(1, weight=1)
+
+        tax_rows = [
+            ("Subtotal Exenta (Gs.):", gs(self.factura.get("subtotal_exenta", 0))),
+            ("Subtotal Gravada 5% (Gs.):", gs(self.factura.get("subtotal_gravada_5", 0))),
+            ("Subtotal Gravada 10% (Gs.):", gs(self.factura.get("subtotal_gravada_10", 0))),
+            ("IVA 5% (Gs.):", gs(self.factura.get("iva_5", 0))),
+            ("IVA 10% (Gs.):", gs(self.factura.get("iva_10", 0))),
         ]
-        for r, (lbl, val) in enumerate(total_rows):
-            ctk.CTkLabel(totals, text=lbl, text_color=C["muted"],
-                         font=("Segoe UI", 10)).grid(row=r, column=0, padx=12, pady=2, sticky="e")
-            ctk.CTkLabel(totals, text=val, text_color=C["text"],
-                         font=("Segoe UI", 10, "bold")).grid(row=r, column=1, padx=12, pady=2, sticky="e")
+        for row_i, (lbl, val) in enumerate(tax_rows):
+            ctk.CTkLabel(totals_right, text=lbl, text_color=C["muted"],
+                         font=("Segoe UI", 9),
+                         anchor="e").grid(row=row_i, column=0, padx=(0, 8), pady=1, sticky="e")
+            ctk.CTkLabel(totals_right, text=val, text_color=C["text"],
+                         font=("Segoe UI", 9, "bold"),
+                         anchor="e").grid(row=row_i, column=1, pady=1, sticky="e")
 
-        # Grand total
-        gt = ctk.CTkFrame(totals, fg_color=C["accent"], corner_radius=6)
-        gt.grid(row=len(total_rows), column=0, columnspan=2, sticky="ew", padx=8, pady=(8,12))
-        ctk.CTkLabel(gt, text=f"TOTAL:  {gs(self.factura.get('total', 0))}",
+        # Total final
+        gt = ctk.CTkFrame(scroll, fg_color=C["accent"], corner_radius=8)
+        gt.pack(fill="x", padx=12, pady=(2, 8))
+        ctk.CTkLabel(gt,
+                     text=f"TOTAL A PAGAR:  {gs(self.factura.get('total', 0))}",
                      text_color=C["text_inv"],
-                     font=("Segoe UI", 16, "bold")).pack(pady=8)
+                     font=("Segoe UI", 16, "bold")).pack(pady=10)
 
-        # ── Buttons ──
+        # ── Botones de acción ──
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=16, pady=8)
 
-        emitir_btn = ctk.CTkButton(bbar, text="✅  Emitir Factura",
-                                    command=self._emitir,
-                                    fg_color=C["accent"], hover_color=C["header"],
-                                    text_color=C["text_inv"],
-                                    font=("Segoe UI", 14, "bold"),
-                                    corner_radius=8, height=44, width=200)
-        emitir_btn.pack(side="right", padx=4)
-
+        ctk.CTkButton(bbar, text="✅  Emitir Factura",
+                      command=self._emitir,
+                      fg_color=C["accent"], hover_color=C["header"],
+                      text_color=C["text_inv"],
+                      font=("Segoe UI", 13, "bold"),
+                      corner_radius=8, height=42, width=200).pack(side="right", padx=4)
         btn(bbar, "✏️ Editar", self._editar, C["accent2"]).pack(side="right", padx=4)
         btn(bbar, "❌ Cancelar", self._cancelar, C["danger"]).pack(side="right", padx=4)
 
@@ -1392,19 +1480,21 @@ class VistaPreviewFactura(ctk.CTkToplevel):
             try:
                 r = client.post(f"/facturas/{fid}/emitir")
                 if r.status_code == 200:
-                    num = r.json().get("numero_completo","")
+                    num = r.json().get("numero_completo", "")
                     self.after(0, lambda: self._emision_ok(num))
                 else:
-                    msg = r.json().get("detail", r.text)
-                    self.after(0, lambda: messagebox.showerror("Error", str(msg)))
+                    try:
+                        msg = r.json().get("detail", r.text)
+                    except Exception:
+                        msg = r.text
+                    self.after(0, lambda: messagebox.showerror("Error al emitir", str(msg)))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+                self.after(0, lambda: messagebox.showerror("Error de conexión", str(e)))
         threading.Thread(target=do, daemon=True).start()
 
     def _emision_ok(self, num):
         messagebox.showinfo("Factura Emitida",
                             f"Factura emitida exitosamente.\nNúmero: {num}")
-        # ── Impresión automática según configuración ──
         fid = self.factura.get("id")
         if fid:
             config = load_print_config()
@@ -1438,14 +1528,14 @@ class VistaPreviewFactura(ctk.CTkToplevel):
 # ── Proveedores ───────────────────────────────────────────────────────────────
 class ProveedoresPanel(CrudPanel):
     TITLE = "🏭  Proveedores"
-    COLUMNS = ["Código","RUC","Razón Social","Teléfono","Email","Ciudad"]
-    COL_WIDTHS = [80,130,240,120,180,120]
+    COLUMNS = ["Código","RUC","Razón Social","Teléfono","Email","Dirección"]
+    COL_WIDTHS = [80,130,240,120,180,150]
 
     def _insert_row(self, p):
         self.tree.insert("", "end", values=(
             p.get("prov_cod",""), p.get("prov_ruc",""),
-            p.get("prov_nombre",""), p.get("prov_telefono",""),
-            p.get("prov_email",""), p.get("prov_ciudad","")))
+            p.get("prov_nom",""), p.get("prov_tel",""),
+            p.get("prov_email",""), p.get("prov_dir","")))
 
     def load(self):
         def do():
@@ -1470,7 +1560,7 @@ class ProveedorForm(ctk.CTkToplevel):
         super().__init__(parent)
         self.item = item; self.on_save = on_save
         self.title("Proveedor")
-        self.geometry("480x380")
+        self.geometry("500x360")
         self.resizable(False, False)
         self.configure(fg_color=C["bg"])
         self.grab_set()
@@ -1484,24 +1574,27 @@ class ProveedorForm(ctk.CTkToplevel):
         form.pack(fill="both", expand=True, padx=20, pady=4)
         form.grid_columnconfigure(1, weight=1)
         v = self.item or {}
-        self.cod    = field(form,"Código *",   0, default=v.get("prov_cod",""))
-        self.ruc    = field(form,"RUC",        1, default=v.get("prov_ruc",""))
-        self.nombre = field(form,"Nombre *",   2, wide=True, default=v.get("prov_nombre",""))
-        self.tel    = field(form,"Teléfono",   3, default=v.get("prov_telefono",""))
-        self.email  = field(form,"Email",      4, default=v.get("prov_email",""))
-        self.ciudad = field(form,"Ciudad",     5, default=v.get("prov_ciudad",""))
+        self.ruc    = field(form,"RUC *",        0, default=v.get("prov_ruc",""))
+        self.nombre = field(form,"Nombre / Razón Social *", 1, wide=True, default=v.get("prov_nom",""))
+        self.tel    = field(form,"Teléfono",   2, default=v.get("prov_tel",""))
+        self.email  = field(form,"Email",      3, default=v.get("prov_email",""))
+        self.dir    = field(form,"Dirección",  4, wide=True, default=v.get("prov_dir",""))
         bbar = ctk.CTkFrame(self, fg_color="transparent")
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar,"Guardar",self._save,C["accent"],"💾").pack(side="right",padx=4)
         btn(bbar,"Cancelar",self.destroy,C["border"]).pack(side="right",padx=4)
 
     def _save(self):
-        if not self.cod.get() or not self.nombre.get():
-            return messagebox.showerror("Error","Código y Nombre son obligatorios")
+        if not self.ruc.get().strip() or not self.nombre.get().strip():
+            return messagebox.showerror("Error","RUC y Nombre son obligatorios")
         payload = {
-            "prov_cod": self.cod.get(), "prov_ruc": self.ruc.get() or None,
-            "prov_nombre": self.nombre.get(), "prov_telefono": self.tel.get() or None,
-            "prov_email": self.email.get() or None, "prov_ciudad": self.ciudad.get() or None,
+            "prov_ruc": self.ruc.get().strip(),
+            "prov_nom": self.nombre.get().strip(),
+            "prov_tel": self.tel.get() or None,
+            "prov_email": self.email.get() or None,
+            "prov_dir": self.dir.get() or None,
+            "prov_contacto": None,
+            "prov_limite": 0.0,
         }
         def do():
             try:
@@ -1512,54 +1605,133 @@ class ProveedorForm(ctk.CTkToplevel):
                 if r.status_code in (200,201):
                     self.after(0, lambda: (self.on_save(), self.destroy()))
                 else:
-                    msg = r.json().get("detail", r.text)
-                    self.after(0, lambda: messagebox.showerror("Error", str(msg)))
+                    try:
+                        detail = r.json().get("detail", r.text)
+                    except Exception:
+                        detail = r.text
+                    self.after(0, lambda: messagebox.showerror("Error al guardar", str(detail)))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+                self.after(0, lambda: messagebox.showerror("Error de conexión", str(e)))
         threading.Thread(target=do, daemon=True).start()
 
 
-# ── Compras ───────────────────────────────────────────────────────────────────
-class ComprasPanel(ctk.CTkFrame):
+# ── Stock ─────────────────────────────────────────────────────────────────────
+class StockPanel(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color=C["bg"])
+        self._all_items = []
+        self._solo_criticos = False
         self._build()
 
     def _build(self):
         hdr = ctk.CTkFrame(self, fg_color="transparent")
-        hdr.pack(fill="x", padx=24, pady=(20,4))
-        ctk.CTkLabel(hdr, text="🛒  Compras",
-                     font=("Segoe UI",22,"bold"), text_color=C["text"]).pack(side="left")
+        hdr.pack(fill="x", padx=24, pady=(20, 4))
+        ctk.CTkLabel(hdr, text="📦  Stock / Inventario",
+                     font=("Segoe UI", 22, "bold"), text_color=C["text"]).pack(side="left")
 
+        # Toolbar
         tb = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10, height=52,
                           border_width=1, border_color=C["border"])
         tb.pack(fill="x", padx=24, pady=4)
         tb.pack_propagate(False)
-        btn(tb,"↺",self.load,C["border"]).pack(side="right",padx=12)
 
-        cols = ["Nro","Fecha","Proveedor","Total","Estado"]
-        widths = [80,110,250,140,110]
+        btn(tb, "↺ Actualizar", self.load, C["border"]).pack(side="right", padx=12)
+
+        self._criticos_var = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(tb, text="Solo críticos (agotados + bajo stock)",
+                        variable=self._criticos_var,
+                        font=("Segoe UI", 11), text_color=C["text"],
+                        command=self._toggle_filtro).pack(side="left", padx=16)
+
+        # Resumen bar
+        self._resumen_lbl = ctk.CTkLabel(self, text="",
+                                          font=("Segoe UI", 11), text_color=C["muted"])
+        self._resumen_lbl.pack(anchor="w", padx=28, pady=(4, 0))
+
+        # Tabla
+        cols = ["Código", "Descripción", "Stock actual", "Precio unit.", "Estado"]
+        widths = [100, 300, 110, 130, 100]
         tf, self.tree = make_table(self, cols, widths)
-        tf.pack(fill="both", expand=True, padx=24, pady=(4,8))
+        tf.pack(fill="both", expand=True, padx=24, pady=(4, 8))
+
+        # Leyenda
+        leg = ctk.CTkFrame(self, fg_color="transparent")
+        leg.pack(fill="x", padx=24, pady=(0, 8))
+        for color, label in [(C["danger"], "Sin stock"), (C["warning"], "Stock bajo (< 5)"),
+                              (C["success"], "Normal")]:
+            f = ctk.CTkFrame(leg, fg_color="transparent")
+            f.pack(side="left", padx=8)
+            ctk.CTkFrame(f, fg_color=color, width=14, height=14, corner_radius=3).pack(side="left")
+            ctk.CTkLabel(f, text=f"  {label}", font=("Segoe UI", 10),
+                         text_color=C["muted"]).pack(side="left")
+
         self.load()
 
     def load(self):
         def do():
             try:
-                data = client.get("/compras").json()
-                items = data if isinstance(data,list) else []
-                self.after(0, lambda: self._refresh(items))
+                r = client.get("/productos", params={"activo": "true", "limit": 500})
+                items = r.json() if r.status_code == 200 and isinstance(r.json(), list) else []
+                self.after(0, lambda: self._set_data(items))
             except Exception as e:
-                self.after(0, lambda: toast(self, str(e), False))
+                self.after(0, lambda: toast(self, f"Error al cargar stock: {e}", False))
         threading.Thread(target=do, daemon=True).start()
 
-    def _refresh(self, items):
-        for i in self.tree.get_children(): self.tree.delete(i)
-        for c in items:
-            self.tree.insert("","end", values=(
-                c.get("com_nro",""), c.get("com_fecha",""),
-                c.get("com_proveedor",""),
-                gs(c.get("com_total",0)), c.get("com_estado","")))
+    def _set_data(self, items):
+        self._all_items = items
+        self._render()
+
+    def _toggle_filtro(self):
+        self._solo_criticos = self._criticos_var.get()
+        self._render()
+
+    def _render(self):
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+
+        agotados = bajo = normales = 0
+        for p in self._all_items:
+            stk = float(p.get("stock") or 0)
+            if stk == 0:
+                estado = "Agotado"
+                agotados += 1
+            elif stk < 5:
+                estado = "Bajo stock"
+                bajo += 1
+            else:
+                estado = "Normal"
+                normales += 1
+
+        total = len(self._all_items)
+        self._resumen_lbl.configure(
+            text=f"Total: {total} productos  |  🔴 Sin stock: {agotados}  |  🟡 Bajo stock: {bajo}  |  🟢 Normal: {normales}"
+        )
+
+        # Leyenda de colores en el Treeview se hace por tags
+        self.tree.tag_configure("agotado", foreground=C["danger"])
+        self.tree.tag_configure("bajo",    foreground=C["warning"])
+        self.tree.tag_configure("normal",  foreground=C["success"])
+
+        for p in self._all_items:
+            stk = float(p.get("stock") or 0)
+            if stk == 0:
+                estado = "Agotado"; tag = "agotado"
+            elif stk < 5:
+                estado = "Bajo stock"; tag = "bajo"
+            else:
+                estado = "Normal"; tag = "normal"
+
+            if self._solo_criticos and tag == "normal":
+                continue
+
+            self.tree.insert("", "end", tags=(tag,), values=(
+                p.get("codigo", "—"),
+                p.get("descripcion", ""),
+                f"{stk:g}",
+                gs(p.get("precio_unitario", 0)),
+                estado
+            ))
+
         apply_zebra(self.tree)
 
 
@@ -1668,7 +1840,7 @@ class CajaPanel(ctk.CTkFrame):
         if not messagebox.askyesno("Confirmar","¿Cerrar la caja de hoy?"): return
         def do():
             try:
-                r = client.post("/caja/cerrar")
+                r = client.post("/caja/cerrar", json={})
                 if r.status_code == 200:
                     self.after(0, lambda: (self.load(), toast(self,"Caja cerrada")))
                 else:
@@ -1683,8 +1855,11 @@ class CajaPanel(ctk.CTkFrame):
             monto = float(self.mv_monto.get().replace(".","").replace(",","."))
         except ValueError:
             return messagebox.showerror("Error","Monto inválido")
-        payload = {"tipo": self.mv_tipo.get(), "monto": monto,
-                   "concepto": self.mv_concepto.get() or "Sin concepto"}
+        payload = {
+            "mov_tipo": self.mv_tipo.get().lower(),
+            "mov_monto": monto,
+            "mov_concepto": self.mv_concepto.get() or "Sin concepto"
+        }
         def do():
             try:
                 r = client.post("/caja/movimiento", json=payload)
@@ -1728,7 +1903,7 @@ class AbrirCajaDialog(ctk.CTkToplevel):
             saldo = float(self.saldo.get().replace(".","").replace(",","."))
         except ValueError:
             saldo = 0
-        payload = {"caj_usuario": self.usuario.get() or "admin", "saldo_inicial": saldo}
+        payload = {"caj_usuario": self.usuario.get() or "admin", "caj_saldoinicial": saldo}
         def do():
             try:
                 r = client.post("/caja/abrir", json=payload)
@@ -1772,10 +1947,10 @@ class ReportesPanel(ctk.CTkFrame):
         self.hasta.insert(0,str(date.today()))
         self.hasta.pack(side="left",padx=4)
 
-        btn(row,"Ventas período",  self._ventas,      C["accent"],  "📊").pack(side="left",padx=8)
-        btn(row,"IVA Mensual",     self._iva,          C["accent2"], "📋").pack(side="left",padx=4)
-        btn(row,"Más Vendidos",    self._mas_vendidos, C["success"], "🏆").pack(side="left",padx=4)
-        btn(row,"Deudores",        self._deudores,     C["warning"], "⚠️").pack(side="left",padx=4)
+        btn(row,"Ventas período",  self._ventas,        C["accent"],  "📊").pack(side="left",padx=8)
+        btn(row,"Más Vendidos",    self._mas_vendidos,  C["success"], "🏆").pack(side="left",padx=4)
+        btn(row,"Deudores",        self._deudores,      C["warning"], "⚠️").pack(side="left",padx=4)
+        btn(row,"Reporte de Stock",self._reporte_stock, C["accent2"], "📦").pack(side="left",padx=4)
 
         self.result_lbl = ctk.CTkLabel(self, text="",
                                         font=("Segoe UI",13,"bold"), text_color=C["text"])
@@ -1812,15 +1987,38 @@ class ReportesPanel(ctk.CTkFrame):
                 self.after(0, lambda: messagebox.showerror("Error",str(e)))
         threading.Thread(target=do,daemon=True).start()
 
-    def _iva(self):
+    def _reporte_stock(self):
         def do():
             try:
-                mes = self.desde.get()[:7]
-                r = client.get("/reportes/iva-mensual", params={"mes":mes})
-                self.after(0, lambda: self._show(r.json(),"📋 IVA Mensual"))
+                r = client.get("/reportes/stock")
+                if r.status_code == 200:
+                    data = r.json()
+                    self.after(0, lambda: self._show_stock(data))
+                else:
+                    self.after(0, lambda: messagebox.showerror("Error", "No se pudo cargar el reporte de stock"))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error",str(e)))
-        threading.Thread(target=do,daemon=True).start()
+                self.after(0, lambda: messagebox.showerror("Error", str(e)))
+        threading.Thread(target=do, daemon=True).start()
+
+    def _show_stock(self, data):
+        self._clear()
+        self.result_lbl.configure(text="📦 Reporte de Stock")
+        agotados = sum(1 for p in data if p.get("estado") == "agotado")
+        bajos    = sum(1 for p in data if p.get("estado") == "bajo")
+        for item in data:
+            estado = item.get("estado", "")
+            estado_lbl = "🔴 Agotado" if estado == "agotado" else "🟡 Bajo" if estado == "bajo" else "🟢 Normal"
+            self.tree.insert("", "end", values=(
+                item.get("codigo","—"),
+                item.get("descripcion",""),
+                f"{item.get('stock', 0):g}",
+                estado_lbl
+            ))
+        apply_zebra(self.tree)
+        if agotados or bajos:
+            self.result_lbl.configure(
+                text=f"📦 Reporte de Stock  —  🔴 Agotados: {agotados}  |  🟡 Bajo stock: {bajos}"
+            )
 
     def _mas_vendidos(self):
         def do():
@@ -2186,12 +2384,12 @@ class ConfiguracionPanel(ctk.CTkFrame):
 
 # ── App Principal ─────────────────────────────────────────────────────────────
 PANELS = {
-    "Dashboard":      DashboardPanel,
+    "Inicio":         DashboardPanel,
     "Facturas":       FacturasPanel,
     "Clientes":       ClientesPanel,
     "Productos":      ProductosPanel,
     "Proveedores":    ProveedoresPanel,
-    "Compras":        ComprasPanel,
+    "Stock":          StockPanel,
     "Caja":           CajaPanel,
     "Reportes":       ReportesPanel,
     "Configuración":  ConfiguracionPanel,
@@ -2254,7 +2452,7 @@ class App(ctk.CTk):
 
         self._header_ref = header
         self._body_ref = body
-        self._sidebar.select("Dashboard")
+        self._sidebar.select("Inicio")
 
     def _navigate(self, name):
         if self._current:
