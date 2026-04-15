@@ -11,7 +11,6 @@ import json
 import os
 import subprocess
 import platform
-import webbrowser
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -134,37 +133,6 @@ def _load_logo(width, height):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-def _lookup_ruc_externo(ruc):
-    """
-    Busca la razón social de un RUC en ruc.com.py.
-    Retorna la razón social si la encuentra, None en caso contrario.
-    Esta es una búsqueda best-effort — no bloquea la UI.
-    """
-    try:
-        # Limpiar el RUC: remover puntos y guiones
-        ruc_clean = ruc.replace(".", "").replace("-", "").strip()
-        if not ruc_clean or len(ruc_clean) < 5:
-            return None
-
-        # Intentar búsqueda en ruc.com.py
-        # El sitio tiene una API o endpoint de búsqueda
-        url = f"https://www.ruc.com.py/api/ruc/{ruc_clean}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        r = requests.get(url, timeout=3, headers=headers)
-
-        if r.status_code == 200:
-            data = r.json()
-            # Buscar el campo de razón social (puede variar según API)
-            razon = data.get("razonSocial") or data.get("razon_social") or data.get("nombre") or data.get("name")
-            if razon:
-                return razon.strip()
-    except Exception:
-        # Si no funciona, simplemente retorna None — no queremos que se vea un error al usuario
-        pass
-
-    return None
 
 
 def make_table(parent, columns, col_widths=None):
@@ -629,17 +597,6 @@ class ClienteForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar, "Guardar", self._save, C["accent"], "💾").pack(side="right", padx=4)
         btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
-        btn(bbar, "🔍 Buscar en ruc.com.py", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
-
-    def _abrir_busqueda_ruc(self):
-        """Abre ruc.com.py en el navegador para búsqueda manual."""
-        ruc = self.ruc.get().strip()
-        if ruc:
-            ruc_clean = ruc.replace(".", "").replace("-", "").strip()
-            url = f"https://www.ruc.com.py/buscar/{ruc_clean}"
-        else:
-            url = "https://www.ruc.com.py/"
-        webbrowser.open(url)
 
     def _save(self):
         if not self.razon.get():
@@ -1628,18 +1585,6 @@ class ProveedorForm(ctk.CTkToplevel):
         bbar.pack(fill="x", padx=20, pady=10)
         btn(bbar,"Guardar",self._save,C["accent"],"💾").pack(side="right",padx=4)
         btn(bbar,"Cancelar",self.destroy,C["border"]).pack(side="right",padx=4)
-        btn(bbar, "🔍 Buscar en ruc.com.py", self._abrir_busqueda_ruc, C["accent2"]).pack(side="left", padx=4)
-
-    def _abrir_busqueda_ruc(self):
-        """Abre ruc.com.py en el navegador para búsqueda manual."""
-        ruc = self.ruc.get().strip()
-        if ruc:
-            # Limpiar RUC para búsqueda (remover puntos, guiones, espacios)
-            ruc_clean = ruc.replace(".", "").replace("-", "").strip()
-            url = f"https://www.ruc.com.py/buscar/{ruc_clean}"
-        else:
-            url = "https://www.ruc.com.py/"
-        webbrowser.open(url)
 
     def _save(self):
         if not self.ruc.get().strip() or not self.nombre.get().strip():
