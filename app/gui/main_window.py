@@ -569,6 +569,7 @@ class ClientesPanel(CrudPanel):
 class ClienteForm(ctk.CTkToplevel):
     def __init__(self, parent, item, on_save):
         super().__init__(parent)
+        self.transient(parent)
         self.item = item; self.on_save = on_save
         self.title("Cliente")
         self.geometry("500x420")
@@ -671,6 +672,7 @@ class ProductosPanel(CrudPanel):
 class ProductoForm(ctk.CTkToplevel):
     def __init__(self, parent, item, on_save):
         super().__init__(parent)
+        self.transient(parent)
         self.item = item; self.on_save = on_save
         self.title("Producto")
         self.geometry("460x380")
@@ -840,6 +842,7 @@ class FacturasPanel(ctk.CTkFrame):
 class FacturaForm(ctk.CTkToplevel):
     def __init__(self, parent, on_save, edit_data=None):
         super().__init__(parent)
+        self.transient(parent)
         self.on_save = on_save
         self.edit_data = edit_data
         self.title("Nueva Factura")
@@ -1219,6 +1222,7 @@ class VistaPreviewFactura(ctk.CTkToplevel):
 
     def __init__(self, parent, factura, cli_name, on_emitir_done, on_edit):
         super().__init__(parent)
+        self.transient(parent)
         self.factura = factura
         self.cli_name = cli_name
         self.on_emitir_done = on_emitir_done
@@ -1560,6 +1564,7 @@ class ProveedoresPanel(CrudPanel):
 class ProveedorForm(ctk.CTkToplevel):
     def __init__(self, parent, item, on_save):
         super().__init__(parent)
+        self.transient(parent)
         self.item = item; self.on_save = on_save
         self.title("Proveedor")
         self.geometry("500x360")
@@ -1878,6 +1883,7 @@ class CajaPanel(ctk.CTkFrame):
 class AbrirCajaDialog(ctk.CTkToplevel):
     def __init__(self, parent, on_done):
         super().__init__(parent)
+        self.transient(parent)
         self.on_done = on_done
         self.title("Abrir Caja")
         self.geometry("360x240")
