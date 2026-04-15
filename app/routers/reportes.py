@@ -9,6 +9,7 @@ from app.models.detalle_factura import DetalleFactura
 from app.models.producto import Producto
 from app.models.caja import Caja
 from app.models.cuota import Cuota
+from typing import Optional
 
 router = APIRouter(prefix="/api/v1/reportes", tags=["reportes"])
 
@@ -129,3 +130,29 @@ def iva_mensual(anio: int = Query(...), mes: int = Query(...), db: Session = Dep
         "iva_10_porciento": round(iva10, 2),
         "total_iva": round(iva5 + iva10, 2)
     }
+
+
+@router.get("/stock")
+def reporte_stock(db: Session = Depends(get_db)):
+    """Reporte de stock actual: productos con nivel normal, bajo y agotados."""
+    productos = db.query(Producto).filter(Producto.activo == True).all()
+    resultado = []
+    for p in productos:
+        stk = float(p.stock) if p.stock is not None else 0.0
+        if stk == 0:
+            estado = "agotado"
+        elif stk < 5:
+            estado = "bajo"
+        else:
+            estado = "normal"
+        resultado.append({
+            "codigo": p.codigo or "—",
+            "descripcion": p.descripcion,
+            "stock": stk,
+            "precio": float(p.precio_unitario) if p.precio_unitario else 0.0,
+            "estado": estado,
+        })
+    # Ordenar: agotados primero, luego bajos, luego normales; dentro de cada grupo por stock asc
+    orden = {"agotado": 0, "bajo": 1, "normal": 2}
+    resultado.sort(key=lambda x: (orden[x["estado"]], x["stock"]))
+    return resultado
