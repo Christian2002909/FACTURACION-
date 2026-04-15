@@ -846,7 +846,8 @@ class FacturaForm(ctk.CTkToplevel):
         self.on_save = on_save
         self.edit_data = edit_data
         self.title("Nueva Factura")
-        self.geometry("860x700")
+        self.geometry("880x800")
+        self.minsize(860, 700)
         self.configure(fg_color=C["bg"])
         self.grab_set()
         self._clientes = []
@@ -964,28 +965,28 @@ class FacturaForm(ctk.CTkToplevel):
                                               font=("Segoe UI", 10), text_color=C["muted"])
         self._prod_status_lbl.pack(anchor="w", padx=12, pady=(0, 6))
 
-        # ── Tabla de ítems ──
-        cols = ["#", "Descripción", "Cant.", "Precio", "IVA%", "Total"]
-        widths = [30, 260, 60, 120, 60, 130]
-        tf, self.items_tree = make_table(self, cols, widths)
-        tf.pack(fill="both", expand=True, padx=16, pady=4)
-        self.items_tree.bind("<Delete>", lambda e: self._quitar())
+        # ── Botones inferiores (anclados al fondo) ──
+        bbar = ctk.CTkFrame(self, fg_color="transparent")
+        bbar.pack(side="bottom", fill="x", padx=16, pady=8)
+        btn(bbar, "Vista Previa", self._vista_previa, C["accent"], "👁️").pack(side="right", padx=4)
+        btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
 
-        # ── Barra de totales ──
+        # ── Barra de totales (anclada al fondo) ──
         bot = ctk.CTkFrame(self, fg_color=C["panel"], corner_radius=10,
                            border_width=1, border_color=C["border"])
-        bot.pack(fill="x", padx=16, pady=4)
+        bot.pack(side="bottom", fill="x", padx=16, pady=4)
         self.total_lbl = ctk.CTkLabel(bot, text="Total: Gs. 0",
                                        font=("Segoe UI", 14, "bold"), text_color=C["success"])
         self.total_lbl.pack(side="right", padx=16, pady=8)
         ctk.CTkLabel(bot, text="Presione Delete para quitar un ítem",
                      text_color=C["muted"], font=("Segoe UI", 10)).pack(side="left", padx=16)
 
-        # ── Botones inferiores ──
-        bbar = ctk.CTkFrame(self, fg_color="transparent")
-        bbar.pack(fill="x", padx=16, pady=8)
-        btn(bbar, "Vista Previa", self._vista_previa, C["accent"], "👁️").pack(side="right", padx=4)
-        btn(bbar, "Cancelar", self.destroy, C["border"]).pack(side="right", padx=4)
+        # ── Tabla de ítems (ocupa el espacio restante) ──
+        cols = ["#", "Descripción", "Cant.", "Precio", "IVA%", "Total"]
+        widths = [30, 260, 60, 120, 60, 130]
+        tf, self.items_tree = make_table(self, cols, widths)
+        tf.pack(fill="both", expand=True, padx=16, pady=4)
+        self.items_tree.bind("<Delete>", lambda e: self._quitar())
 
         if self.edit_data:
             self._prefill_edit()
