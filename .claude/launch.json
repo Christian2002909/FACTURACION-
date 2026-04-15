@@ -5,13 +5,51 @@
       "name": "FastAPI Backend",
       "runtimeExecutable": "venv/Scripts/uvicorn",
       "runtimeArgs": ["app.main:app", "--reload", "--port", "8000"],
-      "port": 8000
+      "port": 8000,
+      "description": "Ejecuta el backend FastAPI en modo desarrollo"
+    },
+    {
+      "name": "pytest - All Tests",
+      "runtimeExecutable": "venv/Scripts/pytest",
+      "runtimeArgs": ["tests/", "-v", "--tb=short"],
+      "description": "Ejecuta toda la suite de tests"
+    },
+    {
+      "name": "pytest - With Coverage",
+      "runtimeExecutable": "venv/Scripts/pytest",
+      "runtimeArgs": ["tests/", "--cov=app", "--cov-report=html", "-v"],
+      "description": "Ejecuta tests con reporte de cobertura"
+    },
+    {
+      "name": "pytest - Validators",
+      "runtimeExecutable": "venv/Scripts/pytest",
+      "runtimeArgs": ["tests/test_validators.py", "-v"],
+      "description": "Tests de validadores Paraguay"
+    },
+    {
+      "name": "pytest - Auth Service",
+      "runtimeExecutable": "venv/Scripts/pytest",
+      "runtimeArgs": ["tests/test_auth_service.py", "-v"],
+      "description": "Tests de autenticación"
+    },
+    {
+      "name": "pytest - API Routers",
+      "runtimeExecutable": "venv/Scripts/pytest",
+      "runtimeArgs": ["tests/test_routers_api.py", "-v"],
+      "description": "Tests de endpoints API"
+    },
+    {
+      "name": "pytest - Schemas",
+      "runtimeExecutable": "venv/Scripts/pytest",
+      "runtimeArgs": ["tests/test_schemas.py", "-v"],
+      "description": "Tests de validación Pydantic"
     },
     {
       "name": "n8n Automations",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["n8n", "start"],
-      "port": 5678
+      "port": 5678,
+      "description": "Ejecuta n8n para automatizaciones"
     }
   ]
 }
